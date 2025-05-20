@@ -1,51 +1,46 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import withAuth from '@/lib/withAuth';
 import Link from 'next/link';
+import useAuth from '@/lib/hooks/useAuth';
+import resumeService from '@/lib/resumeService';
 
 function ResumesSettings() {
+  const { user } = useAuth();
   const [resumeSuccess, setResumeSuccess] = useState('');
   const [resumeError, setResumeError] = useState('');
   const [uploadingResume, setUploadingResume] = useState(false);
-  
-  // Mock resumes data
-  const [resumes, setResumes] = useState([
-    {
-      id: '1',
-      name: 'Software Engineer Resume',
-      version: '1.2',
-      createdAt: '2023-09-15T14:30:00Z',
-      updatedAt: '2023-10-20T09:45:00Z',
-      isDefault: true,
-      fileSize: '425 KB',
-      file: '/resumes/software-engineer-resume.pdf'
-    },
-    {
-      id: '2',
-      name: 'Technical Resume with Cover Letter',
-      version: '1.0',
-      createdAt: '2023-08-10T11:15:00Z',
-      updatedAt: '2023-08-10T11:15:00Z',
-      isDefault: false,
-      fileSize: '512 KB',
-      file: '/resumes/technical-resume.pdf'
-    },
-    {
-      id: '3',
-      name: 'Project Manager Resume',
-      version: '2.1',
-      createdAt: '2023-07-05T16:20:00Z',
-      updatedAt: '2023-11-02T14:10:00Z',
-      isDefault: false,
-      fileSize: '487 KB',
-      file: '/resumes/project-manager-resume.pdf'
-    }
-  ]);
+  const [resumes, setResumes] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   const [newResumeName, setNewResumeName] = useState('');
   const [fileToUpload, setFileToUpload] = useState(null);
+  
+  // Load user's resumes when component mounts
+  useEffect(() => {
+    fetchResumes();
+  }, []);
+  
+  // Fetch resumes from the API
+  const fetchResumes = async () => {
+    setLoading(true);
+    try {
+      const response = await resumeService.getAllResumes();
+      if (response && response.success) {
+        setResumes(response.data || []);
+      } else {
+        // Don't show error, just use empty array
+        setResumes([]);
+      }
+    } catch (error) {
+      console.error('Error fetching resumes:', error);
+      // Don't show error, just use empty array
+      setResumes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Format date string
   const formatDate = (dateString) => {
@@ -70,7 +65,7 @@ function ResumesSettings() {
     }
   };
   
-  const handleUploadResume = (e) => {
+  const handleUploadResume = async (e) => {
     e.preventDefault();
     setResumeError('');
     
@@ -99,56 +94,70 @@ function ResumesSettings() {
     
     setUploadingResume(true);
     
-    // In a real app, this would upload to the backend
-    // For now, simulate the process
-    setTimeout(() => {
-      const newResume = {
-        id: Date.now().toString(),
-        name: newResumeName,
-        version: '1.0',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isDefault: false,
-        fileSize: `${Math.round(fileToUpload.size / 1024)} KB`,
-        file: URL.createObjectURL(fileToUpload)
-      };
+    try {
+      // Upload the resume
+      const response = await resumeService.uploadResume(newResumeName, fileToUpload);
       
-      setResumes((prevResumes) => [...prevResumes, newResume]);
-      setResumeSuccess('Resume uploaded successfully');
-      setNewResumeName('');
-      setFileToUpload(null);
-      
-      // Reset the file input
-      const fileInput = document.getElementById('resume-file');
-      if (fileInput) {
-        fileInput.value = '';
+      if (response && response.success) {
+        setResumeSuccess('Resume uploaded successfully');
+        setNewResumeName('');
+        setFileToUpload(null);
+        
+        // Reset the file input
+        const fileInput = document.getElementById('resume-file');
+        if (fileInput) {
+          fileInput.value = '';
+        }
+        
+        // Refresh resumes list
+        fetchResumes();
+      } else {
+        setResumeError('Failed to upload resume');
       }
-      
+    } catch (error) {
+      console.error('Error uploading resume:', error);
+      setResumeError(error.response?.data?.error || 'Failed to upload resume. Please try again.');
+    } finally {
       setUploadingResume(false);
       
       // Clear success message after 3 seconds
-      setTimeout(() => {
-        setResumeSuccess('');
-      }, 3000);
-    }, 1500);
+      if (!resumeError) {
+        setTimeout(() => {
+          setResumeSuccess('');
+        }, 3000);
+      }
+    }
   };
   
-  const handleSetDefault = (resumeId) => {
-    setResumes(prevResumes => 
-      prevResumes.map(resume => ({
-        ...resume,
-        isDefault: resume.id === resumeId
-      }))
-    );
-    
-    setResumeSuccess('Default resume updated');
-    setTimeout(() => {
-      setResumeSuccess('');
-    }, 3000);
+  const handleSetDefault = async (resumeId) => {
+    try {
+      const response = await resumeService.setDefaultResume(resumeId);
+      
+      if (response && response.success) {
+        // Update the local state to reflect the new default resume
+        setResumes(prevResumes => 
+          prevResumes.map(resume => ({
+            ...resume,
+            isDefault: resume._id === resumeId
+          }))
+        );
+        
+        setResumeSuccess('Default resume updated');
+        setTimeout(() => {
+          setResumeSuccess('');
+        }, 3000);
+      } else {
+        setResumeError('Failed to update default resume');
+      }
+    } catch (error) {
+      console.error('Error setting default resume:', error);
+      setResumeError(error.response?.data?.error || 'Failed to set default resume');
+    }
   };
   
-  const handleDeleteResume = (resumeId) => {
-    const resumeToDelete = resumes.find(r => r.id === resumeId);
+  const handleDeleteResume = async (resumeId) => {
+    // Find the resume to delete
+    const resumeToDelete = resumes.find(r => r._id === resumeId);
     
     if (resumeToDelete.isDefault) {
       setResumeError('Cannot delete the default resume. Please set another resume as default first.');
@@ -158,12 +167,35 @@ function ResumesSettings() {
       return;
     }
     
-    setResumes(prevResumes => prevResumes.filter(resume => resume.id !== resumeId));
+    try {
+      const response = await resumeService.deleteResume(resumeId);
+      
+      if (response && response.success) {
+        // Update local state
+        setResumes(prevResumes => prevResumes.filter(resume => resume._id !== resumeId));
+        setResumeSuccess('Resume deleted successfully');
+      } else {
+        setResumeError('Failed to delete resume');
+      }
+    } catch (error) {
+      console.error('Error deleting resume:', error);
+      setResumeError(error.response?.data?.error || 'Failed to delete resume');
+    }
     
-    setResumeSuccess('Resume deleted successfully');
     setTimeout(() => {
       setResumeSuccess('');
+      setResumeError('');
     }, 3000);
+  };
+
+  // Handle preview function
+  const handlePreview = (resumeId) => {
+    window.open(resumeService.getPreviewUrl(resumeId), '_blank');
+  };
+
+  // Handle download function
+  const handleDownload = (resumeId) => {
+    window.open(resumeService.getDownloadUrl(resumeId), '_blank');
   };
 
   return (
@@ -309,7 +341,11 @@ function ResumesSettings() {
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">My Resumes</h3>
           </div>
           <div className="px-6 py-5">
-            {resumes.length > 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+              </div>
+            ) : resumes.length > 0 ? (
               <div className="overflow-hidden">
                 <div className="flex flex-col">
                   <div className="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
@@ -337,7 +373,7 @@ function ResumesSettings() {
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                             {resumes.map((resume) => (
-                              <tr key={resume.id}>
+                              <tr key={resume._id}>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center">
                                     <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-primary-100 rounded-md dark:bg-primary-900">
@@ -347,16 +383,24 @@ function ResumesSettings() {
                                     </div>
                                     <div className="ml-4">
                                       <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                        {resume.name}
+                                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                          <Link 
+                                            href={`/resume/${resume._id}`}
+                                            className="hover:text-primary-600 dark:hover:text-primary-400 hover:underline"
+                                            title="Click to preview resume"
+                                          >
+                                            {resume.name}
+                                          </Link>
+                                        </div>
                                       </div>
                                       <div className="text-sm text-gray-500 dark:text-gray-400">
-                                        {resume.fileSize}
+                                        {resume.fileSize || 'N/A'}
                                       </div>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900 dark:text-white">{resume.version}</div>
+                                  <div className="text-sm text-gray-900 dark:text-white">{resume.version || '1.0'}</div>
                                   <div className="text-sm text-gray-500 dark:text-gray-400">
                                     Created {formatDate(resume.createdAt)}
                                   </div>
@@ -371,7 +415,7 @@ function ResumesSettings() {
                                     </span>
                                   ) : (
                                     <button
-                                      onClick={() => handleSetDefault(resume.id)}
+                                      onClick={() => handleSetDefault(resume._id)}
                                       className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300 text-xs"
                                     >
                                       Set as Default
@@ -380,16 +424,21 @@ function ResumesSettings() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                   <div className="flex items-center justify-end space-x-3">
-                                    <a
-                                      href={resume.file}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                    <Link
+                                      href={`/resume/${resume._id}`}
                                       className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
                                     >
                                       Preview
+                                    </Link>
+                                    <a
+                                      href={resumeService.getDownloadUrl(resume._id)}
+                                      download
+                                      className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
+                                    >
+                                      Download
                                     </a>
                                     <button
-                                      onClick={() => handleDeleteResume(resume.id)}
+                                      onClick={() => handleDeleteResume(resume._id)}
                                       className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                                     >
                                       Delete

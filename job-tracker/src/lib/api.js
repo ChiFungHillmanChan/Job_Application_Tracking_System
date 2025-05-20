@@ -70,6 +70,9 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   ];
   
+  // Mock resumes data
+  let mockResumes = [];
+
   // Try to load any previously stored mock users
   try {
     const storedUsers = localStorage.getItem(MOCK_USERS_KEY);
@@ -80,14 +83,22 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       // Initialize the storage
       localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(mockUsers));
     }
+    
+    // Try to load any previously stored mock resumes
+    const storedResumes = localStorage.getItem('job_tracker_mock_resumes');
+    if (storedResumes) {
+      mockResumes = JSON.parse(storedResumes);
+      console.info('Loaded stored mock resumes:', mockResumes.length);
+    }
   } catch (error) {
-    console.error('Error accessing localStorage for mock users:', error);
+    console.error('Error accessing localStorage for mock data:', error);
   }
   
   // Backup original methods to allow fallthrough
   const originalGet = api.get;
   const originalPost = api.post;
   const originalPut = api.put;
+  const originalDelete = axios.delete.bind(axios);
   
   // Helper to save users to localStorage
   const saveMockUsers = () => {
@@ -95,6 +106,15 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(mockUsers));
     } catch (error) {
       console.error('Error saving mock users to localStorage:', error);
+    }
+  };
+  
+  // Helper to save resumes to localStorage
+  const saveMockResumes = () => {
+    try {
+      localStorage.setItem('job_tracker_mock_resumes', JSON.stringify(mockResumes));
+    } catch (error) {
+      console.error('Error saving mock resumes to localStorage:', error);
     }
   };
   
@@ -150,6 +170,160 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
               subscriptionTier: user.subscriptionTier,
               createdAt: user.createdAt
             }
+          }
+        };
+      }
+      
+      // Handle resume routes
+      if (url === '/resumes') {
+        console.info('Using mock data for resumes');
+        
+        // Get user ID from token
+        let userId = 'mock-user';
+        const token = localStorage.getItem('token');
+        if (token && token.startsWith('mock-token-')) {
+          userId = token.split('-')[2];
+        }
+        
+        // Filter resumes for current user
+        const userResumes = mockResumes.filter(resume => resume.user === userId);
+        
+        return {
+          data: {
+            success: true,
+            count: userResumes.length,
+            data: userResumes
+          }
+        };
+      }
+      
+      // Handle resume download
+      if (url.startsWith('/resumes/') && url.includes('/download')) {
+        console.info('Using mock data for resume download');
+        
+        // Extract resume ID from URL
+        const resumeId = url.split('/')[2];
+        
+        // Get user ID from token
+        let userId = 'mock-user';
+        const token = localStorage.getItem('token');
+        if (token && token.startsWith('mock-token-')) {
+          userId = token.split('-')[2];
+        }
+        
+        // Check if resume exists and belongs to user
+        const resume = mockResumes.find(r => r._id === resumeId && r.user === userId);
+        
+        if (!resume) {
+          throw {
+            response: {
+              status: 404,
+              data: {
+                success: false,
+                error: 'Resume not found or not authorized to access'
+              }
+            }
+          };
+        }
+        
+        // In development mode, we can't actually serve files
+        // Instead, we'll redirect to a sample PDF or document viewer
+        // This URL will open in a new tab for download
+        
+        // For development purposes, return a URL to a sample PDF 
+        // We'll use different sample URLs based on file extension
+        let sampleUrl = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+        
+        if (resume.file) {
+          const ext = resume.file.substring(resume.file.lastIndexOf('.') + 1).toLowerCase();
+          if (ext === 'doc' || ext === 'docx') {
+            sampleUrl = 'https://file-examples.com/storage/fe1aa0c9d563ea1e4a2add5/2017/02/file-sample_100kB.doc';
+          }
+        }
+        
+        // Return the URL directly so it can be used for download
+        return { data: sampleUrl };
+      }
+      
+      // Handle resume preview
+      if (url.startsWith('/resumes/') && url.includes('/preview')) {
+        console.info('Using mock data for resume preview');
+        
+        // Extract resume ID from URL
+        const resumeId = url.split('/')[2];
+        
+        // Get user ID from token
+        let userId = 'mock-user';
+        const token = localStorage.getItem('token');
+        if (token && token.startsWith('mock-token-')) {
+          userId = token.split('-')[2];
+        }
+        
+        // Check if resume exists and belongs to user
+        const resume = mockResumes.find(r => r._id === resumeId && r.user === userId);
+        
+        if (!resume) {
+          throw {
+            response: {
+              status: 404,
+              data: {
+                success: false,
+                error: 'Resume not found or not authorized to access'
+              }
+            }
+          };
+        }
+        
+        // For development purposes, return a URL to a sample PDF in a viewer
+        // We can use different sample URLs based on file extension
+        let previewUrl = 'https://mozilla.github.io/pdf.js/web/viewer.html?file=https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+        
+        if (resume.file) {
+          const ext = resume.file.substring(resume.file.lastIndexOf('.') + 1).toLowerCase();
+          if (ext === 'doc' || ext === 'docx') {
+            // For Word docs, we don't have a good online viewer by default
+            // So we'll use Google Docs viewer with a sample file
+            previewUrl = 'https://docs.google.com/viewer?url=https://file-examples.com/storage/fe1aa0c9d563ea1e4a2add5/2017/02/file-sample_100kB.doc&embedded=true';
+          }
+        }
+        
+        // Return the preview URL
+        return { data: previewUrl };
+      }
+      
+      // Handle individual resume retrieval
+      if (url.startsWith('/resumes/') && !url.includes('/download') && !url.includes('/preview') && !url.includes('/default')) {
+        console.info('Using mock data for resume details');
+        
+        // Extract resume ID from URL
+        const resumeId = url.split('/')[2];
+        
+        // Get user ID from token
+        let userId = 'mock-user';
+        const token = localStorage.getItem('token');
+        if (token && token.startsWith('mock-token-')) {
+          userId = token.split('-')[2];
+        }
+        
+        // Find the resume
+        const resume = mockResumes.find(r => r._id === resumeId && r.user === userId);
+        
+        if (!resume) {
+          throw {
+            response: {
+              status: 404,
+              data: {
+                success: false,
+                error: 'Resume not found'
+              }
+            }
+          };
+        }
+        
+        return {
+          data: {
+            success: true,
+            data: resume
           }
         };
       }
@@ -268,6 +442,79 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           data: {
             success: true,
             data: 'Email sent'
+          }
+        };
+      }
+      // Handle resume upload
+      else if (url === '/resumes') {
+        console.info('Using mock data for resume upload');
+        
+        // Get user ID from token
+        let userId = 'mock-user';
+        const token = localStorage.getItem('token');
+        if (token && token.startsWith('mock-token-')) {
+          userId = token.split('-')[2];
+        }
+        
+        // Handle FormData
+        let name, file, version;
+        
+        if (data instanceof FormData) {
+          name = data.get('name');
+          file = data.get('resumeFile');
+          version = data.get('version') || '1.0';
+        } else {
+          // Handle JSON data format if not FormData
+          name = data.name;
+          file = { name: 'mock-file.pdf', size: 1024 * 100 }; // Mock file 100KB
+          version = data.version || '1.0';
+        }
+        
+        if (!file) {
+          throw {
+            response: {
+              status: 400,
+              data: {
+                success: false,
+                error: 'Please upload a file'
+              }
+            }
+          };
+        }
+        
+        if (!name) {
+          throw {
+            response: {
+              status: 400,
+              data: {
+                success: false,
+                error: 'Please provide a name for your resume'
+              }
+            }
+          };
+        }
+        
+        // Create mock resume object
+        const newResume = {
+          _id: `mock-resume-${Date.now()}`,
+          user: userId,
+          name: name,
+          file: file.name,
+          version: version,
+          fileSize: `${Math.round(file.size / 1024)} KB`,
+          isDefault: mockResumes.filter(r => r.user === userId).length === 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Add to mock resumes
+        mockResumes.push(newResume);
+        saveMockResumes();
+        
+        return {
+          data: {
+            success: true,
+            data: newResume
           }
         };
       }
@@ -452,7 +699,121 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         };
       }
       
+      // Handle setting a resume as default
+      if (url.includes('/resumes/') && url.includes('/default')) {
+        console.info('Using mock data for setting default resume');
+        
+        // Get user ID from token
+        let userId = 'mock-user';
+        const token = localStorage.getItem('token');
+        if (token && token.startsWith('mock-token-')) {
+          userId = token.split('-')[2];
+        }
+        
+        // Extract resume ID from URL
+        const resumeId = url.split('/')[2];
+        
+        // Find the resume
+        const resumeIndex = mockResumes.findIndex(r => r._id === resumeId && r.user === userId);
+        
+        if (resumeIndex === -1) {
+          throw {
+            response: {
+              status: 404,
+              data: {
+                success: false,
+                error: 'Resume not found'
+              }
+            }
+          };
+        }
+        
+        // Set all resumes as non-default first
+        mockResumes.forEach((resume, index) => {
+          if (resume.user === userId) {
+            mockResumes[index].isDefault = false;
+          }
+        });
+        
+        // Set the selected resume as default
+        mockResumes[resumeIndex].isDefault = true;
+        saveMockResumes();
+        
+        return {
+          data: {
+            success: true,
+            data: mockResumes[resumeIndex]
+          }
+        };
+      }
+      
       // For other URLs, let the error propagate
+      throw error;
+    }
+  };
+  
+  // Add delete method for mock data
+  api.delete = async function(url, config) {
+    try {
+      // Try the real API first
+      return await originalDelete(url, config);
+    } catch (error) {
+      console.warn(`API DELETE to ${url} failed, using mock data`);
+      
+      // Handle resume deletion
+      if (url.includes('/resumes/')) {
+        console.info('Using mock data for deleting resume');
+        
+        // Get user ID from token
+        let userId = 'mock-user';
+        const token = localStorage.getItem('token');
+        if (token && token.startsWith('mock-token-')) {
+          userId = token.split('-')[2];
+        }
+        
+        // Extract resume ID from URL
+        const resumeId = url.split('/')[2];
+        
+        // Find the resume
+        const resumeIndex = mockResumes.findIndex(r => r._id === resumeId && r.user === userId);
+        
+        if (resumeIndex === -1) {
+          throw {
+            response: {
+              status: 404,
+              data: {
+                success: false,
+                error: 'Resume not found'
+              }
+            }
+          };
+        }
+        
+        // Check if it's the default resume
+        if (mockResumes[resumeIndex].isDefault) {
+          throw {
+            response: {
+              status: 400,
+              data: {
+                success: false,
+                error: 'Cannot delete the default resume. Please set another resume as default first.'
+              }
+            }
+          };
+        }
+        
+        // Remove the resume
+        mockResumes.splice(resumeIndex, 1);
+        saveMockResumes();
+        
+        return {
+          data: {
+            success: true,
+            data: {}
+          }
+        };
+      }
+      
       throw error;
     }
   };

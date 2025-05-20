@@ -1,3 +1,5 @@
+// Updated server.js file with resume routes added
+
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
@@ -30,8 +32,13 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+// Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/jobs', require('./routes/jobs'));
+app.use('/api/resumes', require('./routes/resumes')); // Add the resume routes
+
+// Serve static files from the uploads directory
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use(errorHandler);
 
