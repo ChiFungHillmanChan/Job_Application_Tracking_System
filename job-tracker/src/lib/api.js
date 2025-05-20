@@ -154,7 +154,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         };
       }
       
-      // For other URLs, let the error propagate
       throw error;
     }
   };
@@ -187,7 +186,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         // Verify password - for mock purposes, we directly compare passwords
         const isMatch = await matchPassword(password, user.password);
         if (!isMatch) {
-          // Password doesn't match - provide a user-friendly error
           throw { 
             response: { 
               status: 401, 
@@ -273,8 +271,7 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           }
         };
       }
-      
-      // For other URLs, let the error propagate
+
       throw error;
     }
   };
@@ -309,8 +306,101 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           }
         };
       }
-      
-      // Mock update profile response
+
+      else if (url === '/auth/password') {
+        // Get current user from token
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw { response: { status: 401, data: { error: 'Not authorized' } } };
+        }
+        
+        // For simplicity, find any user in the mock database
+        let allMockUsers = [];
+        try {
+          const mockUsersString = localStorage.getItem('job_tracker_mock_users');
+          if (mockUsersString) {
+            allMockUsers = JSON.parse(mockUsersString);
+          } else {
+            throw { response: { status: 500, data: { error: 'No mock users found' } } };
+          }
+        } catch (error) {
+          throw { response: { status: 500, data: { error: 'Error parsing mock users' } } };
+        }
+        
+        // Try to find the current user
+        let currentUser = null;
+        
+        // If using a mock token, try to find a matching user
+        if (token.startsWith('mock-token-')) {
+          for (const user of allMockUsers) {
+            if (token.includes(user.id)) {
+              currentUser = user;
+              break;
+            }
+          }
+        }
+        
+        // If we still don't have a user, try using the first mock user
+        if (!currentUser && allMockUsers.length > 0) {
+          currentUser = allMockUsers[0];
+        }
+        
+        // If we still don't have a user, we can't proceed
+        if (!currentUser) {
+          throw { response: { status: 404, data: { error: 'User not found' } } };
+        }
+        
+        // Extract passwords from request data
+        const { currentPassword, newPassword } = data;
+        
+        // Verify current password
+        if (currentUser.password !== currentPassword) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Current password is incorrect' 
+              } 
+            } 
+          };
+        }
+        
+        // Update password and set passwordChangedAt
+        const now = new Date().toISOString();
+        
+        // Find the user in the mock users array and update their password
+        const userIndex = allMockUsers.findIndex(u => u.id === currentUser.id);
+        if (userIndex === -1) {
+          throw { response: { status: 500, data: { error: 'Could not update password' } } };
+        }
+        
+        allMockUsers[userIndex].password = newPassword;
+        allMockUsers[userIndex].passwordChangedAt = now;
+        
+        // Save updated users
+        try {
+          localStorage.setItem('job_tracker_mock_users', JSON.stringify(allMockUsers));
+          
+          return {
+            data: {
+              success: true,
+              message: 'Password updated successfully'
+            }
+          };
+        } catch (error) {
+          throw {
+            response: {
+              status: 500,
+              data: {
+                success: false,
+                error: 'Error saving updated password'
+              }
+            }
+          };
+        }
+      }
+
       if (url === '/auth/updateprofile') {
         // Get current user from token
         const token = localStorage.getItem('token');

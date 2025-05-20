@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import withAuth from '@/lib/withAuth';
 import Link from 'next/link';
+import api from '@/lib/api';
 
 function AccountSettings() {
   const { user, logout } = useAuth();
@@ -40,7 +41,7 @@ function AccountSettings() {
     setPasswordError('');
     setPasswordSuccess('');
     
-    // Validation
+    // Basic validation
     if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
       setPasswordError('All fields are required');
       return;
@@ -57,22 +58,17 @@ function AccountSettings() {
     }
     
     try {
-      // This would be a real API call in production
-      // await api.put('/api/users/password', passwordData);
+      // Connect to the API to change the password
+      await api.put('/auth/password', passwordData);
       
-      // For demo purposes, we'll just simulate success
-      setTimeout(() => {
-        setPasswordSuccess('Password updated successfully');
-        setPasswordData({
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        });
-        setShowPasswordForm(false);
-      }, 1000);
-      
+      setPasswordSuccess('Password updated successfully');
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      setShowPasswordForm(false);
     } catch (error) {
-      console.error('Error changing password:', error);
       setPasswordError(error.response?.data?.error || 'Failed to update password');
     }
   };
@@ -174,7 +170,10 @@ function AccountSettings() {
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {user?.googleId || user?.appleId ? 
                   'You are using social login and do not have a password set.' : 
-                  'Your password was last changed on [date]. For security, consider changing it regularly.'}
+                  user?.passwordChangedAt ? 
+                    `Your password was last changed on ${new Date(user.passwordChangedAt).toLocaleDateString()}.` : 
+                    `Your account was created on ${new Date(user?.createdAt).toLocaleDateString()}.`} 
+                For security, consider changing your password regularly.
               </p>
             ) : (
               <form onSubmit={handlePasswordSubmit} className="space-y-6">

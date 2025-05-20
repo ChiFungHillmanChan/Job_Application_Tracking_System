@@ -34,6 +34,10 @@ const UserSchema = new mongoose.Schema({
   resetPasswordExpire: {
     type: Date,
   },
+  passwordChangedAt: {
+    type: Date,
+    default: null
+  },
   preferences: {
     theme: {
       type: String,
@@ -70,6 +74,11 @@ UserSchema.pre('save', async function (next) {
 
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+  
+  // If password is modified and it's not a new user, update passwordChangedAt
+  if (this.isModified('password') && !this.isNew) {
+    this.passwordChangedAt = Date.now();
+  }
 });
 
 // Match user entered password to hashed password in database

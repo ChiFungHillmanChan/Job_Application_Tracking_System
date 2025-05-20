@@ -1,0 +1,115 @@
+.
+├── directory_structure.txt
+├── job-tracker
+│   ├── backend
+│   │   ├── app.js
+│   │   ├── config
+│   │   │   ├── db.js
+│   │   │   └── env.js
+│   │   ├── controllers
+│   │   │   ├── authController.js
+│   │   │   └── jobController.js
+│   │   ├── logs
+│   │   ├── middleware
+│   │   │   ├── auth.js
+│   │   │   └── error.js
+│   │   ├── models
+│   │   │   ├── Job.js
+│   │   │   ├── Resume.js
+│   │   │   └── User.js
+│   │   ├── package-lock.json
+│   │   ├── package.json
+│   │   ├── routes
+│   │   │   ├── auth.js
+│   │   │   └── jobs.js
+│   │   ├── server.js
+│   │   └── utils
+│   │       ├── logger.js
+│   │       ├── sendEmail.js
+│   │       └── tokenManager.js
+│   ├── eslint.config.mjs
+│   ├── jsconfig.json
+│   ├── next.config.js
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── postcss.config.mjs
+│   ├── public
+│   │   ├── file.svg
+│   │   ├── globe.svg
+│   │   ├── next.svg
+│   │   ├── vercel.svg
+│   │   └── window.svg
+│   ├── README.md
+│   ├── src
+│   │   ├── app
+│   │   │   ├── api
+│   │   │   │   ├── auth
+│   │   │   │   │   ├── login
+│   │   │   │   │   │   └── route.js
+│   │   │   │   │   └── register
+│   │   │   │   │       └── route.js
+│   │   │   │   └── jobs
+│   │   │   │       └── route.js
+│   │   │   ├── auth
+│   │   │   │   ├── debug
+│   │   │   │   │   └── page.jsx
+│   │   │   │   ├── forgot-password
+│   │   │   │   │   └── page.jsx
+│   │   │   │   ├── login
+│   │   │   │   │   └── page.jsx
+│   │   │   │   ├── register
+│   │   │   │   │   └── page.jsx
+│   │   │   │   └── resetpassword
+│   │   │   │       └── [token]
+│   │   │   │           └── pages.jsx
+│   │   │   ├── dashboard
+│   │   │   │   ├── layout.jsx
+│   │   │   │   └── page.jsx
+│   │   │   ├── favicon.ico
+│   │   │   ├── globals.css
+│   │   │   ├── layout.js
+│   │   │   ├── layout.jsx
+│   │   │   ├── page.js
+│   │   │   ├── page.jsx
+│   │   │   └── settings
+│   │   │       ├── account
+│   │   │       │   └── page.jsx
+│   │   │       ├── appearance
+│   │   │       │   └── page.jsx
+│   │   │       ├── page.jsx
+│   │   │       ├── profile
+│   │   │       │   └── page.jsx
+│   │   │       └── resumes
+│   │   │           └── page.jsx
+│   │   ├── components
+│   │   │   ├── authWrapper.jsx
+│   │   │   ├── DashboardError.jsx
+│   │   │   ├── forms
+│   │   │   │   ├── ForgotPasswordForm.jsx
+│   │   │   │   ├── LoginForm.jsx
+│   │   │   │   └── RegisterForm.jsx
+│   │   │   ├── layout
+│   │   │   │   ├── Footer.jsx
+│   │   │   │   ├── Header.jsx
+│   │   │   │   ├── MainLayout.jsx
+│   │   │   │   └── Sidebar.jsx
+│   │   │   └── ui
+│   │   │       ├── Button.jsx
+│   │   │       ├── Card.jsx
+│   │   │       ├── Input.jsx
+│   │   │       └── Select.jsx
+│   │   ├── lib
+│   │   │   ├── api.js
+│   │   │   ├── authDebug.js
+│   │   │   ├── hooks
+│   │   │   │   └── useAuth.js
+│   │   │   ├── utils
+│   │   │   └── withAuth.js
+│   │   └── styles
+│   │       └── globals.css
+│   └── tailwind.config.js
+├── project-file-locations.md
+└── README.md
+
+39 directories, 74 files

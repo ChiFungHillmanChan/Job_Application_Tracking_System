@@ -40,9 +40,11 @@ export const AuthProvider = ({ children }) => {
           try {
             const response = await api.get('/auth/me');
             if (response.data && response.data.success && response.data.user) {
-              setUser(response.data.user);
+              setUser({
+                ...response.data.user,
+                passwordChangedAt: response.data.user.passwordChangedAt
+              });
             } else {
-              // Invalid token or user data
               localStorage.removeItem('token');
               setToken(null);
               setError('Your session has expired. Please login again.');
@@ -326,6 +328,40 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  
+  const changePassword = async (passwordData) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.put('/auth/password', passwordData);
+      
+      if (response.data && response.data.success) {
+        // Update the user data to include the new passwordChangedAt
+        setUser(prevUser => ({
+          ...prevUser,
+          passwordChangedAt: new Date().toISOString()
+        }));
+        return response.data;
+      } else {
+        throw new Error('Password change response missing success data');
+      }
+    } catch (error) {
+      console.error('Password change error:', error);
+      let errorMessage = 'Password change failed. Please try again.';
+      
+      if (error && error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error && error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Check if user is authenticated
   const isAuthenticated = () => {
     return !!token && !!user;
@@ -351,6 +387,7 @@ export const AuthProvider = ({ children }) => {
         updateProfile,
         forgotPassword,
         resetPassword,
+        changePassword,
         clearError
       }}
     >

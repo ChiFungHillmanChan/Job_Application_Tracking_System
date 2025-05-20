@@ -288,6 +288,72 @@ const updateProfile = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Change user password
+// @route   PUT /api/auth/password
+// @access  Private
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  // Input validation
+  if (!currentPassword || !newPassword) {
+    logger.warn(`Password change attempt missing required fields for user ID: ${req.user.id}`);
+    return res.status(400).json({
+      success: false,
+      error: 'Current password and new password are required'
+    });
+  }
+
+  if (newPassword.length < 6) {
+    logger.warn(`Password change attempt with short password for user ID: ${req.user.id}`);
+    return res.status(400).json({
+      success: false,
+      error: 'New password must be at least 6 characters'
+    });
+  }
+
+  // Find user by ID
+  const user = await User.findById(req.user.id).select('+password');
+  
+  if (!user) {
+    logger.error(`User not found for password change: ${req.user.id}`);
+    return res.status(404).json({
+      success: false,
+      error: 'User not found'
+    });
+  }
+
+  // Check if current password matches
+  const isMatch = await user.matchPassword(currentPassword);
+  if (!isMatch) {
+    logger.warn(`Failed password change attempt (incorrect current password) for email: ${user.email}`);
+    return res.status(401).json({
+      success: false,
+      error: 'Current password is incorrect'
+    });
+  }
+
+  // Set new password
+  user.password = newPassword;
+  // The passwordChangedAt field will be updated by the pre-save hook
+  await user.save();
+
+  // Log detailed password change information to server console
+  console.log('Password change details:', {
+    userName: user.name,
+    userEmail: user.email,
+    newPassword: '******', // Don't log actual password for security
+    changeDate: new Date().toISOString(),
+    accountCreateDate: user.createdAt
+  });
+
+  logger.info(`Password updated successfully for user: ${user.email}, name: ${user.name}, changed at: ${new Date().toISOString()}, account created: ${user.createdAt}`);
+
+  res.status(200).json({
+    success: true,
+    message: 'Password updated successfully'
+  });
+});
+
 module.exports = {
   registerUser,
   loginUser,
@@ -295,5 +361,6 @@ module.exports = {
   logoutUser,
   forgotPassword,
   resetPassword,
-  updateProfile
+  updateProfile,
+  changePassword
 };
