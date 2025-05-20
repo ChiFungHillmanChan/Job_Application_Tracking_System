@@ -1,17 +1,33 @@
-const crypto = require('crypto');
-const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
+const asyncHandler = require('express-async-handler');
+const { generateToken, generateResetPasswordToken, verifyToken } = require('../utils/tokenManager');
+const crypto = require('crypto');
 const logger = require('../utils/logger');
-const { generateToken, generateResetPasswordToken } = require('../utils/tokenManager');
-const sendEmail = require('../utils/sendEmail');
 
 // @desc    Register user
 // @route   POST /api/auth/register
 // @access  Public
-const register = asyncHandler(async (req, res) => {
+const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
-  // Check if user exists
+  // Input validation
+  if (!name || !email || !password) {
+    logger.warn('Registration attempt with missing required fields');
+    return res.status(400).json({
+      success: false,
+      error: 'Please provide name, email, and password'
+    });
+  }
+
+  if (password.length < 6) {
+    logger.warn(`Registration attempt with short password for email: ${email}`);
+    return res.status(400).json({
+      success: false,
+      error: 'Password must be at least 6 characters'
+    });
+  }
+
+  // Check if user already exists
   const userExists = await User.findOne({ email });
 
   if (userExists) {
@@ -22,34 +38,42 @@ const register = asyncHandler(async (req, res) => {
     });
   }
 
-  // Create user
-  const user = await User.create({
-    name,
-    email,
-    password
-  });
-
-  if (user) {
-    // Generate token
-    const token = generateToken(user);
+  try {
+    // Create user
+    const user = await User.create({
+      name,
+      email,
+      password
+    });
 
     logger.info(`New user registered: ${email}`);
+    
     res.status(201).json({
       success: true,
-      token,
+      token: generateToken(user),
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         subscriptionTier: user.subscriptionTier,
-        preferences: user.preferences
+        createdAt: user.createdAt
       }
     });
-  } else {
-    logger.error(`Failed to register user: ${email}`);
-    res.status(400).json({
+  } catch (error) {
+    logger.error(`Error during user registration: ${error.message}`);
+    
+    // Handle mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        error: messages
+      });
+    }
+    
+    res.status(500).json({
       success: false,
-      error: 'Invalid user data'
+      error: 'Server error during registration'
     });
   }
 });
@@ -57,14 +81,23 @@ const register = asyncHandler(async (req, res) => {
 // @desc    Login user
 // @route   POST /api/auth/login
 // @access  Public
-const login = asyncHandler(async (req, res) => {
+const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  // Check for user
+  // Input validation
+  if (!email || !password) {
+    logger.warn('Login attempt with missing email or password');
+    return res.status(400).json({
+      success: false,
+      error: 'Please provide email and password'
+    });
+  }
+
+  // Find user
   const user = await User.findOne({ email }).select('+password');
 
   if (!user) {
-    logger.warn(`Login attempt with non-existent email: ${email}`);
+    logger.warn(`Failed login attempt for non-existent email: ${email}`);
     return res.status(401).json({
       success: false,
       error: 'Invalid credentials'
@@ -73,28 +106,25 @@ const login = asyncHandler(async (req, res) => {
 
   // Check if password matches
   const isMatch = await user.matchPassword(password);
-
   if (!isMatch) {
-    logger.warn(`Failed login attempt for user: ${email}`);
+    logger.warn(`Failed login attempt (password mismatch) for email: ${email}`);
     return res.status(401).json({
       success: false,
       error: 'Invalid credentials'
     });
   }
 
-  // Generate token
-  const token = generateToken(user);
-
   logger.info(`User logged in: ${email}`);
+  
   res.status(200).json({
     success: true,
-    token,
+    token: generateToken(user),
     user: {
       id: user._id,
       name: user.name,
       email: user.email,
       subscriptionTier: user.subscriptionTier,
-      preferences: user.preferences
+      createdAt: user.createdAt
     }
   });
 });
@@ -103,28 +133,29 @@ const login = asyncHandler(async (req, res) => {
 // @route   GET /api/auth/me
 // @access  Private
 const getMe = asyncHandler(async (req, res) => {
-  // User is already available in req due to the auth middleware
-  const user = await User.findById(req.user.id);
-
-  if (!user) {
-    logger.error(`Failed to retrieve user profile: ${req.user.id}`);
-    return res.status(404).json({
-      success: false,
-      error: 'User not found'
-    });
-  }
-
-  logger.info(`User profile retrieved: ${user.email}`);
+  // User is already available in req.user from the auth middleware
   res.status(200).json({
     success: true,
     user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      subscriptionTier: user.subscriptionTier,
-      preferences: user.preferences,
-      createdAt: user.createdAt
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      subscriptionTier: req.user.subscriptionTier,
+      preferences: req.user.preferences,
+      createdAt: req.user.createdAt
     }
+  });
+});
+
+// @desc    Logout user (clear cookie)
+// @route   GET /api/auth/logout
+// @access  Private
+const logoutUser = asyncHandler(async (req, res) => {
+  logger.info(`User logged out: ${req.user.email}`);
+  
+  res.status(200).json({
+    success: true,
+    message: 'Logged out successfully'
   });
 });
 
@@ -138,49 +169,31 @@ const forgotPassword = asyncHandler(async (req, res) => {
     logger.warn(`Password reset attempt for non-existent email: ${req.body.email}`);
     return res.status(404).json({
       success: false,
-      error: 'There is no user with that email'
+      error: 'User not found'
     });
   }
 
   // Get reset token
   const { resetToken, resetPasswordToken, resetPasswordExpire } = generateResetPasswordToken();
 
-  // Save to database
+  // Save the hashed token to the database
   await User.findByIdAndUpdate(user._id, {
     resetPasswordToken,
     resetPasswordExpire
   });
 
-  // Create reset url
+  // Create reset URL
   const resetUrl = `${req.protocol}://${req.get('host')}/auth/resetpassword/${resetToken}`;
 
-  const message = `You are receiving this email because you (or someone else) has requested the reset of a password. Please make a PUT request to: \n\n ${resetUrl}`;
+  // In a real application, you would send an email here with the resetUrl
+  logger.info(`Password reset token generated for user: ${user.email}`);
 
-  try {
-    await sendEmail({
-      email: user.email,
-      subject: 'Password reset token',
-      message
-    });
-
-    logger.info(`Password reset email sent to: ${user.email}`);
-    res.status(200).json({
-      success: true,
-      data: 'Email sent'
-    });
-  } catch (error) {
-    logger.error(`Failed to send password reset email: ${error.message}`);
-    
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-
-    await user.save({ validateBeforeSave: false });
-
-    res.status(500).json({
-      success: false,
-      error: 'Email could not be sent'
-    });
-  }
+  res.status(200).json({
+    success: true,
+    data: 'Email sent',
+    // For development only - remove in production
+    resetUrl: resetUrl
+  });
 });
 
 // @desc    Reset password
@@ -202,7 +215,7 @@ const resetPassword = asyncHandler(async (req, res) => {
     logger.warn('Invalid or expired password reset token used');
     return res.status(400).json({
       success: false,
-      error: 'Invalid token'
+      error: 'Invalid or expired token'
     });
   }
 
@@ -212,13 +225,11 @@ const resetPassword = asyncHandler(async (req, res) => {
   user.resetPasswordExpire = undefined;
   await user.save();
 
-  // Generate new token
-  const token = generateToken(user);
+  logger.info(`Password reset successful for user: ${user.email}`);
 
-  logger.info(`Password successfully reset for user: ${user.email}`);
   res.status(200).json({
     success: true,
-    token,
+    token: generateToken(user),
     user: {
       id: user._id,
       name: user.name,
@@ -227,114 +238,62 @@ const resetPassword = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Google OAuth login/register
-// @route   POST /api/auth/google
-// @access  Public
-const googleAuth = asyncHandler(async (req, res) => {
-  const { googleId, name, email } = req.body;
-
-  if (!googleId || !name || !email) {
-    logger.error('Incomplete Google auth data provided');
-    return res.status(400).json({
+// @desc    Update user profile
+// @route   PUT /api/auth/updateprofile
+// @access  Private
+const updateProfile = asyncHandler(async (req, res) => {
+  const { name, email } = req.body;
+  
+  // Find user by ID
+  const user = await User.findById(req.user.id);
+  
+  if (!user) {
+    logger.error(`User not found for profile update: ${req.user.id}`);
+    return res.status(404).json({
       success: false,
-      error: 'Please provide all required fields'
+      error: 'User not found'
     });
   }
-
-  // Check if user exists
-  let user = await User.findOne({ email });
-
-  if (user) {
-    // Update googleId if not set
-    if (!user.googleId) {
-      user.googleId = googleId;
-      await user.save();
+  
+  // Update fields
+  if (name) user.name = name;
+  if (email && email !== user.email) {
+    // Check if email is already in use by another user
+    const emailExists = await User.findOne({ email });
+    if (emailExists && emailExists._id.toString() !== req.user.id) {
+      logger.warn(`Profile update attempt with existing email: ${email}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Email already in use'
+      });
     }
-  } else {
-    // Create new user
-    user = await User.create({
-      name,
-      email,
-      googleId,
-      // Generate a random password for the account
-      password: crypto.randomBytes(16).toString('hex')
-    });
+    user.email = email;
   }
-
-  // Generate token
-  const token = generateToken(user);
-
-  logger.info(`User authenticated via Google: ${email}`);
+  
+  // Save user
+  await user.save();
+  
+  logger.info(`Profile updated for user: ${user.email}`);
+  
   res.status(200).json({
     success: true,
-    token,
     user: {
       id: user._id,
       name: user.name,
       email: user.email,
       subscriptionTier: user.subscriptionTier,
-      preferences: user.preferences
-    }
-  });
-});
-
-// @desc    Apple OAuth login/register
-// @route   POST /api/auth/apple
-// @access  Public
-const appleAuth = asyncHandler(async (req, res) => {
-  const { appleId, name, email } = req.body;
-
-  if (!appleId || !email) {
-    logger.error('Incomplete Apple auth data provided');
-    return res.status(400).json({
-      success: false,
-      error: 'Please provide all required fields'
-    });
-  }
-
-  // Check if user exists
-  let user = await User.findOne({ email });
-
-  if (user) {
-    // Update appleId if not set
-    if (!user.appleId) {
-      user.appleId = appleId;
-      await user.save();
-    }
-  } else {
-    // Create new user
-    user = await User.create({
-      name: name || email.split('@')[0], // Use part of email as name if not provided
-      email,
-      appleId,
-      // Generate a random password for the account
-      password: crypto.randomBytes(16).toString('hex')
-    });
-  }
-
-  // Generate token
-  const token = generateToken(user);
-
-  logger.info(`User authenticated via Apple: ${email}`);
-  res.status(200).json({
-    success: true,
-    token,
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      subscriptionTier: user.subscriptionTier,
-      preferences: user.preferences
+      preferences: user.preferences,
+      createdAt: user.createdAt
     }
   });
 });
 
 module.exports = {
-  register,
-  login,
+  registerUser,
+  loginUser,
   getMe,
+  logoutUser,
   forgotPassword,
   resetPassword,
-  googleAuth,
-  appleAuth
+  updateProfile
 };

@@ -50,14 +50,65 @@ if (typeof window !== 'undefined') {
   );
 }
 
-// For development mode, create a mock API adapter
+// For development mode, create a mock API adapter that still respects authentication
 if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-  console.info('Running in development mode - API calls will be simulated if server is unavailable');
+  console.info('Running in development mode - API calls may be simulated if server is unavailable');
+  
+  // Create a persistent mock user store using localStorage
+  const MOCK_USERS_KEY = 'job_tracker_mock_users';
+  
+  // Initialize with a default test user
+  let mockUsers = [
+    {
+      id: 'dev-user-1',
+      name: 'Test User',
+      email: 'test@example.com',
+      // This is just a placeholder - in our mock system we'll compare plaintext passwords
+      password: 'password123',
+      subscriptionTier: 'free',
+      createdAt: '2023-01-01T00:00:00Z'
+    }
+  ];
+  
+  // Try to load any previously stored mock users
+  try {
+    const storedUsers = localStorage.getItem(MOCK_USERS_KEY);
+    if (storedUsers) {
+      mockUsers = JSON.parse(storedUsers);
+      console.info('Loaded stored mock users:', mockUsers.length);
+    } else {
+      // Initialize the storage
+      localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(mockUsers));
+    }
+  } catch (error) {
+    console.error('Error accessing localStorage for mock users:', error);
+  }
   
   // Backup original methods to allow fallthrough
   const originalGet = api.get;
   const originalPost = api.post;
   const originalPut = api.put;
+  
+  // Helper to save users to localStorage
+  const saveMockUsers = () => {
+    try {
+      localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(mockUsers));
+    } catch (error) {
+      console.error('Error saving mock users to localStorage:', error);
+    }
+  };
+  
+  // Simple mock password compare function - in development mode we store plaintext passwords
+  const matchPassword = async (enteredPassword, storedPassword) => {
+    return enteredPassword === storedPassword;
+  };
+  
+  // Mock token generation
+  const generateToken = (user) => {
+    // In a real app, this would use JWT signing
+    // For mock purposes, create a simple encoded token
+    return `mock-token-${user.id}-${Date.now()}`;
+  };
   
   // Wrap API methods with mock data handling
   api.get = async function(url, config) {
@@ -65,19 +116,39 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       // Try the real API first
       return await originalGet.call(this, url, config);
     } catch (error) {
-      console.warn(`API call to ${url} failed, using mock data`);
+      // Check if it's a network error (server not running)
+      const isNetworkError = error.message && error.message.includes('Network Error');
+      if (isNetworkError) {
+        console.warn(`Network error when calling ${url}. Using mock data instead.`);
+      } else {
+        console.warn(`API call to ${url} failed, using mock data`, error);
+      }
       
       // Mock responses based on URL
-      if (url === '/api/auth/me') {
+      if (url === '/auth/me') {
+        // Check for valid token
+        const token = localStorage.getItem('token');
+        if (!token || !token.startsWith('mock-token-')) {
+          throw { response: { status: 401, data: { error: 'Not authorized' } } };
+        }
+        
+        // Extract user id from token
+        const userId = token.split('-')[2];
+        const user = mockUsers.find(u => u.id === userId);
+        
+        if (!user) {
+          throw { response: { status: 401, data: { error: 'User not found' } } };
+        }
+        
         return {
           data: {
             success: true,
             user: {
-              id: 'mock-user-id',
-              name: 'Development User',
-              email: 'dev@example.com',
-              subscriptionTier: 'free',
-              createdAt: new Date().toISOString()
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              subscriptionTier: user.subscriptionTier,
+              createdAt: user.createdAt
             }
           }
         };
@@ -95,23 +166,106 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     } catch (error) {
       console.warn(`API POST to ${url} failed, using mock data`);
       
-      // Mock login/register responses
-      if (url === '/api/auth/login' || url === '/api/auth/register' || 
-          url === '/api/auth/google' || url === '/api/auth/apple') {
+      // Mock login response
+      if (url === '/auth/login') {
+        const { email, password } = data;
+        const user = mockUsers.find(u => u.email === email);
+        
+        if (!user) {
+          // User not found - provide a user-friendly error
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Invalid email or password' 
+              } 
+            } 
+          };
+        }
+        
+        // Verify password - for mock purposes, we directly compare passwords
+        const isMatch = await matchPassword(password, user.password);
+        if (!isMatch) {
+          // Password doesn't match - provide a user-friendly error
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Invalid email or password' 
+              } 
+            } 
+          };
+        }
+        
+        console.info('Login successful for:', email);
+        const token = generateToken(user);
+        
         return {
           data: {
             success: true,
-            token: 'mock-jwt-token',
+            token,
             user: {
-              id: 'mock-user-id',
-              name: data.name || 'Development User',
-              email: data.email || 'dev@example.com',
-              subscriptionTier: 'free',
-              createdAt: new Date().toISOString()
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              subscriptionTier: user.subscriptionTier,
+              createdAt: user.createdAt
             }
           }
         };
-      } else if (url === '/api/auth/forgotpassword') {
+      } 
+      // Mock register response
+      else if (url === '/auth/register') {
+        const { name, email, password } = data;
+        
+        // Check if user already exists
+        if (mockUsers.some(u => u.email === email)) {
+          console.error('Registration failed: Email already exists:', email);
+          throw { 
+            response: { 
+              status: 400, 
+              data: { 
+                success: false, 
+                error: 'User already exists' 
+              } 
+            } 
+          };
+        }
+        
+        // Create new mock user with a plaintext password for development mode
+        const newUser = {
+          id: `dev-user-${mockUsers.length + 1}`,
+          name,
+          email,
+          password: password, // Store plaintext password for mock system
+          subscriptionTier: 'free',
+          createdAt: new Date().toISOString()
+        };
+        
+        // Add user and save to localStorage
+        mockUsers.push(newUser);
+        saveMockUsers();
+        
+        console.info('Registration successful for:', email);
+        const token = generateToken(newUser);
+        
+        return {
+          data: {
+            success: true,
+            token,
+            user: {
+              id: newUser.id,
+              name: newUser.name,
+              email: newUser.email,
+              subscriptionTier: newUser.subscriptionTier,
+              createdAt: newUser.createdAt
+            }
+          }
+        };
+      } 
+      else if (url === '/auth/forgotpassword') {
         return {
           data: {
             success: true,
@@ -133,15 +287,76 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       console.warn(`API PUT to ${url} failed, using mock data`);
       
       // Mock reset password response
-      if (url.includes('/api/auth/resetpassword/')) {
+      if (url.includes('/auth/resetpassword/')) {
+        const { password } = data;
+        // In a real app, we would validate the reset token
+        // For mock purposes, just update the test user's password
+        const testUser = mockUsers.find(u => u.email === 'test@example.com');
+        if (testUser) {
+          testUser.password = password;
+          saveMockUsers();
+        }
+        
         return {
           data: {
             success: true,
-            token: 'mock-jwt-token',
+            token: generateToken(testUser || mockUsers[0]),
             user: {
-              id: 'mock-user-id',
-              name: 'Development User',
-              email: 'dev@example.com'
+              id: testUser?.id || 'dev-user-1',
+              name: testUser?.name || 'Test User',
+              email: testUser?.email || 'test@example.com'
+            }
+          }
+        };
+      }
+      
+      // Mock update profile response
+      if (url === '/auth/updateprofile') {
+        // Get current user from token
+        const token = localStorage.getItem('token');
+        if (!token || !token.startsWith('mock-token-')) {
+          throw { response: { status: 401, data: { error: 'Not authorized' } } };
+        }
+        
+        // Extract user id from token
+        const userId = token.split('-')[2];
+        const userIndex = mockUsers.findIndex(u => u.id === userId);
+        
+        if (userIndex === -1) {
+          throw { response: { status: 404, data: { error: 'User not found' } } };
+        }
+        
+        // Update user fields
+        if (data.name) mockUsers[userIndex].name = data.name;
+        if (data.email) {
+          // Check if email is already in use by another user
+          const emailExists = mockUsers.findIndex(u => u.email === data.email && u.id !== userId);
+          if (emailExists !== -1) {
+            throw { 
+              response: { 
+                status: 400, 
+                data: { 
+                  success: false, 
+                  error: 'Email already in use' 
+                } 
+              } 
+            };
+          }
+          mockUsers[userIndex].email = data.email;
+        }
+        
+        // Save updated users
+        saveMockUsers();
+        
+        return {
+          data: {
+            success: true,
+            user: {
+              id: mockUsers[userIndex].id,
+              name: mockUsers[userIndex].name,
+              email: mockUsers[userIndex].email,
+              subscriptionTier: mockUsers[userIndex].subscriptionTier,
+              createdAt: mockUsers[userIndex].createdAt
             }
           }
         };

@@ -1,92 +1,121 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext } from 'react';
-import { useRouter } from 'next/navigation';
+import { createContext, useContext, useState, useEffect } from 'react';
 import api from '@/lib/api';
+import { useRouter } from 'next/navigation';
 
-// Create Auth Context
-const AuthContext = createContext();
+// Create the auth context with default values
+const AuthContext = createContext({
+  user: null,
+  token: null,
+  loading: false,
+  error: null,
+  isAuthenticated: () => false,
+  register: async () => {},
+  login: async () => {},
+  logout: async () => {},
+  updateProfile: async () => {},
+  forgotPassword: async () => {},
+  resetPassword: async () => {},
+  clearError: () => {}
+});
 
-// Provider component that wraps app and provides auth context
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
   const router = useRouter();
 
-  // Initialize auth state from localStorage on mount
+  // Initialize auth state from localStorage on component mount
   useEffect(() => {
-    const initAuth = async () => {
+    const initializeAuth = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        // Check if we're in a browser environment
-        if (typeof window !== 'undefined') {
-          const storedToken = localStorage.getItem('token');
-          
-          if (storedToken) {
-            setToken(storedToken);
-            
-            try {
-              // Fetch current user data
-              const response = await api.get('/api/auth/me');
+        const storedToken = localStorage.getItem('token');
+        if (storedToken) {
+          setToken(storedToken);
+          // Fetch current user data
+          try {
+            const response = await api.get('/auth/me');
+            if (response.data && response.data.success && response.data.user) {
               setUser(response.data.user);
-            } catch (apiError) {
-              console.error('API connection failed:', apiError);
-              
-              // For development purposes - simulate a user if API is not available
-              if (process.env.NODE_ENV === 'development') {
-                console.warn('Using mock user data for development');
-                setUser({
-                  id: 'mock-user-id',
-                  name: 'Development User',
-                  email: 'dev@example.com',
-                  subscriptionTier: 'free',
-                  createdAt: new Date().toISOString()
-                });
-              } else {
-                // In production, clear auth state on API error
-                localStorage.removeItem('token');
-                setToken(null);
-                setUser(null);
-              }
+            } else {
+              // Invalid token or user data
+              localStorage.removeItem('token');
+              setToken(null);
+              setError('Your session has expired. Please login again.');
+            }
+          } catch (error) {
+            console.warn('Error fetching user data:', error);
+            localStorage.removeItem('token');
+            setToken(null);
+            
+            // Only set a user-visible error for authentication failures, not network issues
+            if (error.response && error.response.status === 401) {
+              setError('Your session has expired. Please login again.');
+            } else if (!error.message?.includes('Network Error')) {
+              setError('There was a problem loading your profile. Please try again later.');
             }
           }
         }
       } catch (error) {
-        console.error('Failed to initialize auth:', error);
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('token');
-        }
+        console.warn('Auth initialization error:', error);
+        // Clear token if there's any initialization error
+        localStorage.removeItem('token');
         setToken(null);
-        setUser(null);
       } finally {
         setLoading(false);
       }
     };
 
-    initAuth();
+    initializeAuth();
   }, []);
 
   // Register user
   const register = async (userData) => {
     setLoading(true);
     setError(null);
-    
     try {
-      const response = await api.post('/api/auth/register', userData);
+      const response = await api.post('/auth/register', userData);
       
-      setUser(response.data.user);
-      setToken(response.data.token);
-      
-      localStorage.setItem('token', response.data.token);
-      
-      router.push('/dashboard');
-      return response.data;
+      if (response.data && response.data.success) {
+        // Store token in localStorage
+        try {
+          localStorage.setItem('token', response.data.token);
+        } catch (e) {
+          console.warn('Failed to store token in localStorage:', e);
+        }
+        
+        setToken(response.data.token);
+        setUser(response.data.user);
+        return response.data;
+      } else {
+        throw new Error('Registration response missing success data');
+      }
     } catch (error) {
-      console.error('Registration error:', error);
-      setError(error.response?.data?.error || 'Registration failed');
-      throw error;
+      console.warn('Registration error:', error || 'Unknown error');
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error && error.response?.data?.error) {
+        // Handle both string and array error formats
+        if (Array.isArray(error.response.data.error)) {
+          errorMessage = error.response.data.error.join(', ');
+        } else {
+          errorMessage = error.response.data.error;
+        }
+      } else if (error && error.message) {
+        // Handle specific error messages
+        if (error.message.includes('Network Error')) {
+          errorMessage = 'Cannot connect to the server. The application is running in offline mode.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+      throw error || new Error('Registration failed with unknown error');
     } finally {
       setLoading(false);
     }
@@ -97,68 +126,131 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     
+    // Add validation for credentials
+    if (!credentials || !credentials.email || !credentials.password) {
+      const errorMsg = 'Email and password are required';
+      setError(errorMsg);
+      setLoading(false);
+      throw new Error(errorMsg);
+    }
+    
     try {
-      const response = await api.post('/api/auth/login', credentials);
+      const response = await api.post('/auth/login', credentials);
       
-      setUser(response.data.user);
-      setToken(response.data.token);
-      
-      localStorage.setItem('token', response.data.token);
-      
-      router.push('/dashboard');
-      return response.data;
+      if (response && response.data && response.data.success) {
+        // Store token in localStorage
+        try {
+          localStorage.setItem('token', response.data.token);
+        } catch (e) {
+          console.warn('Failed to store token in localStorage:', e);
+        }
+        
+        setToken(response.data.token);
+        setUser(response.data.user);
+        return response.data;
+      } else {
+        throw new Error('Login response missing success data');
+      }
     } catch (error) {
-      console.error('Login error:', error);
-      setError(error.response?.data?.error || 'Login failed');
-      throw error;
+      // Handle the empty error object case
+      if (!error || Object.keys(error).length === 0) {
+        const errorMsg = 'Login failed with an unknown error';
+        console.warn(errorMsg);
+        setError(errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      console.warn('Login error:', error);
+      let errorMessage = 'Login failed. Please check your credentials and try again.';
+      
+      if (error && error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error && error.message) {
+        // Handle specific error messages
+        if (error.message.includes('Network Error')) {
+          errorMessage = 'Cannot connect to the server. The application is running in offline mode.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+      
+      // Ensure we're always throwing an Error object
+      if (error instanceof Error) {
+        throw error;
+      } else {
+        throw new Error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Google authentication
-  const googleAuth = async (googleData) => {
+  // Logout user
+  const logout = async () => {
     setLoading(true);
-    setError(null);
-    
     try {
-      const response = await api.post('/api/auth/google', googleData);
-      
-      setUser(response.data.user);
-      setToken(response.data.token);
-      
-      localStorage.setItem('token', response.data.token);
-      
-      router.push('/dashboard');
-      return response.data;
+      // Call logout endpoint if token exists
+      if (token) {
+        try {
+          await api.get('/auth/logout');
+        } catch (error) {
+          console.warn('Logout API error:', error || 'Unknown error');
+          // Continue with local logout even if API call fails
+        }
+      }
     } catch (error) {
-      console.error('Google auth error:', error);
-      setError(error.response?.data?.error || 'Google authentication failed');
-      throw error;
+      console.warn('Logout error:', error || 'Unknown error');
+      // Continue with local logout even if an unexpected error occurs
     } finally {
+      // Clear token regardless of API success/failure
+      try {
+        localStorage.removeItem('token');
+      } catch (e) {
+        console.warn('Error removing token from localStorage:', e || 'Unknown error');
+      }
+      setToken(null);
+      setUser(null);
       setLoading(false);
+      // Redirect to login
+      router.push('/auth/login');
     }
   };
 
-  // Apple authentication
-  const appleAuth = async (appleData) => {
+  // Update profile
+  const updateProfile = async (profileData) => {
     setLoading(true);
     setError(null);
-    
     try {
-      const response = await api.post('/api/auth/apple', appleData);
+      const response = await api.put('/auth/updateprofile', profileData);
       
-      setUser(response.data.user);
-      setToken(response.data.token);
-      
-      localStorage.setItem('token', response.data.token);
-      
-      router.push('/dashboard');
-      return response.data;
+      if (response.data && response.data.success) {
+        setUser(response.data.user);
+        return response.data;
+      } else {
+        throw new Error('Profile update response missing success data');
+      }
     } catch (error) {
-      console.error('Apple auth error:', error);
-      setError(error.response?.data?.error || 'Apple authentication failed');
-      throw error;
+      console.warn('Profile update error:', error || 'Unknown error');
+      let errorMessage = 'Profile update failed. Please try again.';
+      
+      if (error && error.response?.data?.error) {
+        if (Array.isArray(error.response.data.error)) {
+          errorMessage = error.response.data.error.join(', ');
+        } else {
+          errorMessage = error.response.data.error;
+        }
+      } else if (error && error.message) {
+        if (error.message.includes('Network Error')) {
+          errorMessage = 'Cannot connect to the server. The application is running in offline mode.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+      throw error || new Error('Profile update failed with unknown error');
     } finally {
       setLoading(false);
     }
@@ -168,16 +260,27 @@ export const AuthProvider = ({ children }) => {
   const forgotPassword = async (email) => {
     setLoading(true);
     setError(null);
-    
     try {
-      const response = await api.post('/api/auth/forgotpassword', { email });
+      const response = await api.post('/auth/forgotpassword', { email });
+      setLoading(false);
       return response.data;
     } catch (error) {
-      console.error('Forgot password error:', error);
-      setError(error.response?.data?.error || 'Failed to send password reset email');
-      throw error;
-    } finally {
+      console.warn('Forgot password error:', error || 'Unknown error');
+      let errorMessage = 'Failed to send password reset email. Please try again.';
+      
+      if (error && error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error && error.message) {
+        if (error.message.includes('Network Error')) {
+          errorMessage = 'Cannot connect to the server. Please try again later.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
       setLoading(false);
+      throw error || new Error('Password reset request failed with unknown error');
     }
   };
 
@@ -185,52 +288,55 @@ export const AuthProvider = ({ children }) => {
   const resetPassword = async (resetToken, password) => {
     setLoading(true);
     setError(null);
-    
     try {
-      const response = await api.put(`/api/auth/resetpassword/${resetToken}`, { password });
+      const response = await api.put(`/auth/resetpassword/${resetToken}`, { password });
       
-      setUser(response.data.user);
-      setToken(response.data.token);
-      
-      localStorage.setItem('token', response.data.token);
-      
-      router.push('/dashboard');
-      return response.data;
+      if (response.data && response.data.success) {
+        // Store token in localStorage
+        try {
+          localStorage.setItem('token', response.data.token);
+        } catch (e) {
+          console.warn('Failed to store token in localStorage:', e);
+        }
+        
+        setToken(response.data.token);
+        setUser(response.data.user);
+        return response.data;
+      } else {
+        throw new Error('Password reset response missing success data');
+      }
     } catch (error) {
-      console.error('Reset password error:', error);
-      setError(error.response?.data?.error || 'Failed to reset password');
-      throw error;
+      console.warn('Reset password error:', error || 'Unknown error');
+      let errorMessage = 'Password reset failed. Please try again.';
+      
+      if (error && error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error && error.message) {
+        if (error.message.includes('Network Error')) {
+          errorMessage = 'Cannot connect to the server. Please try again later.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+      throw error || new Error('Password reset failed with unknown error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Logout user
-  const logout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
-    setToken(null);
-    router.push('/');
+  // Check if user is authenticated
+  const isAuthenticated = () => {
+    return !!token && !!user;
   };
 
-  // Update user profile
-  const updateProfile = async (userData) => {
-    setLoading(true);
+  // Clear error state
+  const clearError = () => {
     setError(null);
-    
-    try {
-      const response = await api.put('/api/users/profile', userData);
-      setUser(response.data.user);
-      return response.data;
-    } catch (error) {
-      console.error('Update profile error:', error);
-      setError(error.response?.data?.error || 'Failed to update profile');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
   };
 
+  // Provide auth context
   return (
     <AuthContext.Provider
       value={{
@@ -238,15 +344,14 @@ export const AuthProvider = ({ children }) => {
         token,
         loading,
         error,
+        isAuthenticated,
         register,
         login,
-        googleAuth,
-        appleAuth,
-        forgotPassword,
-        resetPassword,
         logout,
         updateProfile,
-        isAuthenticated: !!user
+        forgotPassword,
+        resetPassword,
+        clearError
       }}
     >
       {children}
@@ -254,14 +359,12 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// Custom hook to use the auth context
+// Custom hook to use auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  
   return context;
 };
 
