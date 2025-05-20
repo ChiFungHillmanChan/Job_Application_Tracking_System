@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const UserSchema = new mongoose.Schema({
   name: {
@@ -26,6 +27,12 @@ const UserSchema = new mongoose.Schema({
   },
   appleId: {
     type: String,
+  },
+  resetPasswordToken: {
+    type: String,
+  },
+  resetPasswordExpire: {
+    type: Date,
   },
   preferences: {
     theme: {
