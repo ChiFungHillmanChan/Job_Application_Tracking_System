@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import resumeService from '@/lib/resumeService';
 import Link from 'next/link';
+import useAuth from '@/lib/hooks/useAuth';
 
 export default function ResumeViewer() {
   const { id } = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const [resume, setResume] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -20,21 +22,33 @@ export default function ResumeViewer() {
         // Check if we're using mock data
         if (id.startsWith('mock-resume-')) {
           setIsMockData(true);
-          // Find resume in localStorage
+          // Find resume in localStorage - make sure we only get resumes for the current user
           try {
             const storedResumes = localStorage.getItem('job_tracker_mock_resumes');
             if (storedResumes) {
               const mockResumes = JSON.parse(storedResumes);
-              const foundResume = mockResumes.find(r => r._id === id);
-              if (foundResume) {
-                setResume(foundResume);
-                return;
+              
+              // Get the current user ID from token
+              const token = localStorage.getItem('token');
+              let userId = null;
+              
+              if (token && token.startsWith('mock-token-')) {
+                userId = token.split('-')[2];
+              }
+              
+              // Only find resume if it belongs to the current user
+              if (userId) {
+                const foundResume = mockResumes.find(r => r._id === id && r.user === userId);
+                if (foundResume) {
+                  setResume(foundResume);
+                  return;
+                }
               }
             }
           } catch (e) {
             console.error('Error accessing localStorage:', e);
           }
-          setError('Resume not found in mock data');
+          setError('Resume not found or you do not have permission to view it');
           return;
         }
 
@@ -139,7 +153,8 @@ export default function ResumeViewer() {
                   Type: {fileExtension.toUpperCase().substring(1)} File<br />
                   Created: {new Date(resume.createdAt).toLocaleString()}<br />
                   Updated: {new Date(resume.updatedAt).toLocaleString()}<br />
-                  Default: {resume.isDefault ? 'Yes' : 'No'}
+                  Default: {resume.isDefault ? 'Yes' : 'No'}<br />
+                  Owned by: {user?.name || 'Current User'}
                 </p>
               </div>
               

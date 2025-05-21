@@ -16,23 +16,68 @@ function ResumesSettings() {
   
   const [newResumeName, setNewResumeName] = useState('');
   const [fileToUpload, setFileToUpload] = useState(null);
-  
+  const [resumeQuota, setResumeQuota] = useState({
+    limit: Infinity,
+    used: 0,
+    remaining: Infinity,
+    tier: 'premium'
+  });
   // Load user's resumes when component mounts
   useEffect(() => {
     fetchResumes();
-  }, []);
+
+    if (user) {
+      let limit = Infinity;
+      let tier = user.subscriptionTier || 'free';
+      
+      // Set limit based on tier
+      if (tier === 'free') {
+        limit = 8;
+      }
+      
+      setResumeQuota({
+        limit,
+        used: resumes.length,
+        remaining: Math.max(0, limit - resumes.length),
+        tier
+      });
+    }
+  }, [user, resumes.length]);
   
   // Fetch resumes from the API
   const fetchResumes = async () => {
     setLoading(true);
     try {
+      console.log('Fetching resumes...');
       const response = await resumeService.getAllResumes();
+      console.log('Response:', response);
+
       if (response && response.success) {
-        setResumes(response.data || []);
-      } else {
-        // Don't show error, just use empty array
-        setResumes([]);
+      // Make sure we're only setting resumes that belong to the current user
+      setResumes(response.data || []);
+      console.log('Resumes set:', response.data || []);
+      
+      // Update quota information
+      if (user) {
+        let limit = Infinity;
+        let tier = user.subscriptionTier || 'free';
+        
+        // Set limit based on tier
+        if (tier === 'free') {
+          limit = 8;
+        }
+        
+        setResumeQuota({
+          limit,
+          used: response.data?.length || 0,
+          remaining: Math.max(0, limit - (response.data?.length || 0)),
+          tier
+        });
       }
+    } else {
+      setResumes([]);
+      console.log('No resumes found or response unsuccessful');
+    }
     } catch (error) {
       console.error('Error fetching resumes:', error);
       // Don't show error, just use empty array
@@ -92,6 +137,12 @@ function ResumesSettings() {
       return;
     }
     
+    // Check resume quota for free tier users
+    if (user && user.subscriptionTier === 'free' && resumeQuota.remaining <= 0) {
+      setResumeError('You have reached the maximum number of resumes for the free tier. Please upgrade your subscription to add more.');
+      return;
+    }
+    
     setUploadingResume(true);
     
     try {
@@ -116,7 +167,12 @@ function ResumesSettings() {
       }
     } catch (error) {
       console.error('Error uploading resume:', error);
-      setResumeError(error.response?.data?.error || 'Failed to upload resume. Please try again.');
+      // Check for tier limit error
+      if (error.response?.data?.error && error.response.data.tier === 'free') {
+        setResumeError(`${error.response.data.error} You have used ${error.response.data.current}/${error.response.data.limit} resumes.`);
+      } else {
+        setResumeError(error.response?.data?.error || 'Failed to upload resume. Please try again.');
+      }
     } finally {
       setUploadingResume(false);
       
@@ -171,7 +227,7 @@ function ResumesSettings() {
       const response = await resumeService.deleteResume(resumeId);
       
       if (response && response.success) {
-        // Update local state
+        // Update local state - remove the deleted resume
         setResumes(prevResumes => prevResumes.filter(resume => resume._id !== resumeId));
         setResumeSuccess('Resume deleted successfully');
       } else {
@@ -186,16 +242,6 @@ function ResumesSettings() {
       setResumeSuccess('');
       setResumeError('');
     }, 3000);
-  };
-
-  // Handle preview function
-  const handlePreview = (resumeId) => {
-    window.open(resumeService.getPreviewUrl(resumeId), '_blank');
-  };
-
-  // Handle download function
-  const handleDownload = (resumeId) => {
-    window.open(resumeService.getDownloadUrl(resumeId), '_blank');
   };
 
   return (
@@ -339,6 +385,31 @@ function ResumesSettings() {
         <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">My Resumes</h3>
+            {user && (
+              <div className="mt-1 flex justify-between items-center">
+                
+                {user.subscriptionTier === 'free' && (
+                  <div className="text-sm">
+                    <span className={`font-medium ${resumeQuota.remaining > 2 ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                      {resumeQuota.used} / {resumeQuota.limit} resumes used
+                    </span>
+                    {resumeQuota.remaining <= 2 && (
+                      <span className="ml-2 text-orange-600 dark:text-orange-400">
+                        ({resumeQuota.remaining} remaining)
+                      </span>
+                    )}
+                    {resumeQuota.remaining === 0 && (
+                      <Link 
+                        href="/settings" 
+                        className="ml-2 text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                      >
+                        Upgrade now
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="px-6 py-5">
             {loading ? (

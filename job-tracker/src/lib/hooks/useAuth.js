@@ -45,19 +45,27 @@ export const AuthProvider = ({ children }) => {
                 passwordChangedAt: response.data.user.passwordChangedAt
               });
             } else {
+              // Only remove token if we get a clear negative response
               localStorage.removeItem('token');
               setToken(null);
               setError('Your session has expired. Please login again.');
             }
           } catch (error) {
             console.warn('Error fetching user data:', error);
-            localStorage.removeItem('token');
-            setToken(null);
             
-            // Only set a user-visible error for authentication failures, not network issues
+            // Only remove token for auth errors, not network errors
             if (error.response && error.response.status === 401) {
+              localStorage.removeItem('token');
+              setToken(null);
               setError('Your session has expired. Please login again.');
-            } else if (!error.message?.includes('Network Error')) {
+            } else if (error.message && error.message.includes('Network Error')) {
+              // For network errors, keep the token but show a different message
+              console.warn('Network error when fetching user data');
+              // Don't set an error message for network issues on initial load
+              // This prevents showing error messages during temporary outages
+              // setError('Unable to connect to server. Using cached data.');
+            } else {
+              // For other errors, keep the token but show an error
               setError('There was a problem loading your profile. Please try again later.');
             }
           }

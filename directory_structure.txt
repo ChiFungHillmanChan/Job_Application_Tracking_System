@@ -8,7 +8,8 @@
 │   │   │   └── env.js
 │   │   ├── controllers
 │   │   │   ├── authController.js
-│   │   │   └── jobController.js
+│   │   │   ├── jobController.js
+│   │   │   └── resumeController.js
 │   │   ├── logs
 │   │   ├── middleware
 │   │   │   ├── auth.js
@@ -21,7 +22,8 @@
 │   │   ├── package.json
 │   │   ├── routes
 │   │   │   ├── auth.js
-│   │   │   └── jobs.js
+│   │   │   ├── jobs.js
+│   │   │   └── resumes.js
 │   │   ├── server.js
 │   │   └── utils
 │   │       ├── logger.js
@@ -49,8 +51,14 @@
 │   │   │   │   │   │   └── route.js
 │   │   │   │   │   └── register
 │   │   │   │   │       └── route.js
-│   │   │   │   └── jobs
-│   │   │   │       └── route.js
+│   │   │   │   ├── jobs
+│   │   │   │   │   └── route.js
+│   │   │   │   └── resumes
+│   │   │   │       └── [id]
+│   │   │   │           ├── downlaod
+│   │   │   │           │   └── route.js
+│   │   │   │           └── preview
+│   │   │   │               └── route.js
 │   │   │   ├── auth
 │   │   │   │   ├── debug
 │   │   │   │   │   └── page.jsx
@@ -72,6 +80,9 @@
 │   │   │   ├── layout.jsx
 │   │   │   ├── page.js
 │   │   │   ├── page.jsx
+│   │   │   ├── resume
+│   │   │   │   └── [id]
+│   │   │   │       └── page.jsx
 │   │   │   └── settings
 │   │   │       ├── account
 │   │   │       │   └── page.jsx
@@ -104,12 +115,10 @@
 │   │   │   ├── authDebug.js
 │   │   │   ├── hooks
 │   │   │   │   └── useAuth.js
+│   │   │   ├── resumeService.js
 │   │   │   ├── utils
 │   │   │   └── withAuth.js
 │   │   └── styles
 │   │       └── globals.css
 │   └── tailwind.config.js
-├── project-file-locations.md
 └── README.md
-
-39 directories, 74 files

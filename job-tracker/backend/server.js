@@ -16,16 +16,20 @@ connectDB();
 
 const app = express();
 
-app.use(express.json());
 
-// Update the CORS configuration to allow requests from the frontend
+
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? process.env.FRONTEND_URL 
     : ['http://localhost:3000', 'http://127.0.0.1:3000'],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
+app.use(express.json());
 app.use(helmet());
 
 if (process.env.NODE_ENV === 'development') {
@@ -35,7 +39,7 @@ if (process.env.NODE_ENV === 'development') {
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/jobs', require('./routes/jobs'));
-app.use('/api/resumes', require('./routes/resumes')); // Add the resume routes
+app.use('/api/resumes', require('./routes/resumes')); 
 
 // Serve static files from the uploads directory
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));

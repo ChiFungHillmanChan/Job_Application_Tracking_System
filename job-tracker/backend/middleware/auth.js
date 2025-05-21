@@ -47,9 +47,7 @@ const protect = asyncHandler(async (req, res, next) => {
         error: 'Not authorized, token failed'
       });
     }
-  }
-
-  if (!token) {
+  } else {
     logger.error('No token provided');
     res.status(401).json({
       success: false,

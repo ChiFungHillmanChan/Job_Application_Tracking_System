@@ -10,6 +10,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // Only run in browser environment
@@ -36,6 +37,35 @@ if (typeof window !== 'undefined') {
   api.interceptors.response.use(
     (response) => response,
     (error) => {
+      // Handle CORS errors specifically
+      if (error.message && error.message.includes('Network Error')) {
+        console.warn('Possible CORS or network issue:', error.message);
+        
+        // If error occurs during authentication check, handle gracefully
+        if (error.config && error.config.url.includes('/auth/me')) {
+          console.warn('Authentication check failed due to network issue');
+          // Ensure token is still valid before removal
+          try {
+            const token = localStorage.getItem('token');
+            if (token) {
+              // Don't immediately remove the token on network errors
+              // It might just be a temporary connectivity issue
+              return Promise.reject({
+                response: {
+                  status: 0,
+                  data: {
+                    error: 'Network error. Please check your connection.'
+                  }
+                }
+              });
+            }
+          } catch (e) {
+            console.error('Error checking token in localStorage:', e);
+          }
+        }
+      }
+      
+      // Handle 401 Unauthorized errors
       if (error.response && error.response.status === 401) {
         // Redirect to login page on unauthorized access
         try {
@@ -43,8 +73,16 @@ if (typeof window !== 'undefined') {
         } catch (e) {
           console.error('Error removing token from localStorage:', e);
         }
-        window.location.href = '/auth/login';
+        
+        if (typeof window !== 'undefined') {
+          // Use a more gentle approach than immediate redirect
+          // This prevents redirect loops
+          if (!window.location.pathname.includes('/auth/login')) {
+            window.location.href = '/auth/login';
+          }
+        }
       }
+      
       return Promise.reject(error);
     }
   );
@@ -56,22 +94,20 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   
   // Create a persistent mock user store using localStorage
   const MOCK_USERS_KEY = 'job_tracker_mock_users';
-  
+  const MOCK_RESUMES_KEY = 'job_tracker_mock_resumes';
+
   // Initialize with a default test user
   let mockUsers = [
     {
       id: 'dev-user-1',
       name: 'Test User',
       email: 'test@example.com',
-      // This is just a placeholder - in our mock system we'll compare plaintext passwords
       password: 'password123',
       subscriptionTier: 'free',
       createdAt: '2023-01-01T00:00:00Z'
     }
   ];
-  
-  // Mock resumes data
-  let mockResumes = [];
+
 
   // Try to load any previously stored mock users
   try {
@@ -84,14 +120,29 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(mockUsers));
     }
     
-    // Try to load any previously stored mock resumes
-    const storedResumes = localStorage.getItem('job_tracker_mock_resumes');
-    if (storedResumes) {
-      mockResumes = JSON.parse(storedResumes);
-      console.info('Loaded stored mock resumes:', mockResumes.length);
+    // Initialize mock resumes if they don't exist
+    if (!localStorage.getItem(MOCK_RESUMES_KEY)) {
+      localStorage.setItem(MOCK_RESUMES_KEY, JSON.stringify([]));
+    } else {
+      // Verify it's valid JSON
+      try {
+        const storedResumes = localStorage.getItem(MOCK_RESUMES_KEY);
+        JSON.parse(storedResumes); // Just to test if it's valid JSON
+        console.info('Successfully validated stored resumes');
+      } catch (error) {
+        console.warn('Invalid resumes data in localStorage, resetting to empty array');
+        localStorage.setItem(MOCK_RESUMES_KEY, JSON.stringify([]));
+      }
     }
   } catch (error) {
     console.error('Error accessing localStorage for mock data:', error);
+    // Initialize with empty data if there was an error
+    try {
+      localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(mockUsers));
+      localStorage.setItem(MOCK_RESUMES_KEY, JSON.stringify([]));
+    } catch (e) {
+      console.error('Error initializing localStorage:', e);
+    }
   }
   
   // Backup original methods to allow fallthrough
@@ -109,15 +160,99 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   };
   
-  // Helper to save resumes to localStorage
-  const saveMockResumes = () => {
+  const getMockResumes = () => {
     try {
-      localStorage.setItem('job_tracker_mock_resumes', JSON.stringify(mockResumes));
+      const storedResumes = localStorage.getItem(MOCK_RESUMES_KEY);
+      
+      // Check if storedResumes is null, undefined, empty string, or not valid JSON
+      if (!storedResumes || storedResumes === 'undefined' || storedResumes === '') {
+        // Initialize empty array in localStorage and return empty array
+        localStorage.setItem(MOCK_RESUMES_KEY, JSON.stringify([]));
+        return [];
+      }
+      
+      // Try to parse, but be defensive
+      try {
+        return JSON.parse(storedResumes);
+      } catch (parseError) {
+        console.error('Error parsing resume data:', parseError);
+        // Reset to empty array if parsing fails
+        localStorage.setItem(MOCK_RESUMES_KEY, JSON.stringify([]));
+        return [];
+      }
     } catch (error) {
-      console.error('Error saving mock resumes to localStorage:', error);
+      console.error('Error retrieving mock resumes from localStorage:', error);
+      // Initialize empty array in localStorage if there was an error
+      try {
+        localStorage.setItem(MOCK_RESUMES_KEY, JSON.stringify([]));
+      } catch (e) {
+        console.error('Error setting mock resumes in localStorage:', e);
+      }
+      return [];
     }
   };
+
   
+  // Helper to save resumes to localStorage
+  const saveMockResumes = (resumes) => {
+    try {
+      // Ensure resumes is an array
+      if (!Array.isArray(resumes)) {
+        console.error('Attempted to save non-array data as resumes:', resumes);
+        resumes = [];
+      }
+      
+      // Check for and filter out any invalid entries
+      const validResumes = resumes.filter(resume => {
+        // Ensure each resume has at least an ID and user property
+        return resume && resume._id && resume.user;
+      });
+      
+      if (validResumes.length !== resumes.length) {
+        console.warn(`Filtered out ${resumes.length - validResumes.length} invalid resume entries`);
+      }
+      
+      const resumesJson = JSON.stringify(validResumes);
+      localStorage.setItem(MOCK_RESUMES_KEY, resumesJson);
+      console.log(`Saved ${validResumes.length} resumes to localStorage`);
+    } catch (error) {
+      console.error('Error saving mock resumes to localStorage:', error);
+      // Try to reset with empty array as a fallback
+      try {
+        localStorage.setItem(MOCK_RESUMES_KEY, JSON.stringify([]));
+      } catch (e) {
+        console.error('Error resetting mock resumes in localStorage:', e);
+      }
+    }
+  };
+
+  // Updated getCurrentUserId function in api.js
+  const getCurrentUserId = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('No token found in localStorage');
+        return null;
+      }
+      
+      if (!token.startsWith('mock-token-')) {
+        console.warn('Token format is not recognized:', token);
+        return null;
+      }
+      
+      // Extract user ID directly from token
+      const parts = token.split('-');
+      if (parts.length < 3) {
+        console.warn('Token does not contain expected parts:', token);
+        return null;
+      }
+      
+      return parts[2];
+    } catch (error) {
+      console.error('Error retrieving user ID from token:', error);
+      return null;
+    }
+  };
   // Simple mock password compare function - in development mode we store plaintext passwords
   const matchPassword = async (enteredPassword, storedPassword) => {
     return enteredPassword === storedPassword;
@@ -125,8 +260,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   
   // Mock token generation
   const generateToken = (user) => {
-    // In a real app, this would use JWT signing
-    // For mock purposes, create a simple encoded token
     return `mock-token-${user.id}-${Date.now()}`;
   };
   
@@ -173,20 +306,31 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           }
         };
       }
-      
-      // Handle resume routes
       if (url === '/resumes') {
         console.info('Using mock data for resumes');
         
         // Get user ID from token
-        let userId = 'mock-user';
-        const token = localStorage.getItem('token');
-        if (token && token.startsWith('mock-token-')) {
-          userId = token.split('-')[2];
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Not authorized' 
+              } 
+            } 
+          };
         }
         
-        // Filter resumes for current user
-        const userResumes = mockResumes.filter(resume => resume.user === userId);
+        // Get all resumes
+        const mockResumes = getMockResumes();
+        
+        // CRITICAL FIX: Filter resumes for current user only
+        const userResumes = Array.isArray(mockResumes) ? 
+          mockResumes.filter(r => r.user === userId) : [];
+        
+        console.log(`Retrieved ${userResumes.length} resumes for user ${userId} out of ${mockResumes.length} total resumes`);
         
         return {
           data: {
@@ -204,16 +348,23 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         // Extract resume ID from URL
         const resumeId = url.split('/')[2];
         
-        // Get user ID from token
-        let userId = 'mock-user';
-        const token = localStorage.getItem('token');
-        if (token && token.startsWith('mock-token-')) {
-          userId = token.split('-')[2];
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Not authorized' 
+              } 
+            } 
+          };
         }
         
         // Check if resume exists and belongs to user
+        const mockResumes = getMockResumes();
         const resume = mockResumes.find(r => r._id === resumeId && r.user === userId);
-        
+      
         if (!resume) {
           throw {
             response: {
@@ -225,13 +376,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
             }
           };
         }
-        
-        // In development mode, we can't actually serve files
-        // Instead, we'll redirect to a sample PDF or document viewer
-        // This URL will open in a new tab for download
-        
-        // For development purposes, return a URL to a sample PDF 
-        // We'll use different sample URLs based on file extension
         let sampleUrl = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
         
         if (resume.file) {
@@ -252,14 +396,21 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         // Extract resume ID from URL
         const resumeId = url.split('/')[2];
         
-        // Get user ID from token
-        let userId = 'mock-user';
-        const token = localStorage.getItem('token');
-        if (token && token.startsWith('mock-token-')) {
-          userId = token.split('-')[2];
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Not authorized' 
+              } 
+            } 
+          };
         }
         
-        // Check if resume exists and belongs to user
+         // Check if resume exists and belongs to user
+        const mockResumes = getMockResumes();
         const resume = mockResumes.find(r => r._id === resumeId && r.user === userId);
         
         if (!resume) {
@@ -299,13 +450,21 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         const resumeId = url.split('/')[2];
         
         // Get user ID from token
-        let userId = 'mock-user';
-        const token = localStorage.getItem('token');
-        if (token && token.startsWith('mock-token-')) {
-          userId = token.split('-')[2];
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Not authorized' 
+              } 
+            } 
+          };
         }
         
         // Find the resume
+        const mockResumes = getMockResumes();
         const resume = mockResumes.find(r => r._id === resumeId && r.user === userId);
         
         if (!resume) {
@@ -408,7 +567,7 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         
         // Create new mock user with a plaintext password for development mode
         const newUser = {
-          id: `dev-user-${mockUsers.length + 1}`,
+          id: `${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`, // More descriptive ID
           name,
           email,
           password: password, // Store plaintext password for mock system
@@ -420,7 +579,7 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         mockUsers.push(newUser);
         saveMockUsers();
         
-        console.info('Registration successful for:', email);
+        console.info('Registration successful for:', email, 'with ID:', newUser.id);
         const token = generateToken(newUser);
         
         return {
@@ -436,7 +595,7 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
             }
           }
         };
-      } 
+      }
       else if (url === '/auth/forgotpassword') {
         return {
           data: {
@@ -449,11 +608,63 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       else if (url === '/resumes') {
         console.info('Using mock data for resume upload');
         
-        // Get user ID from token
-        let userId = 'mock-user';
-        const token = localStorage.getItem('token');
-        if (token && token.startsWith('mock-token-')) {
-          userId = token.split('-')[2];
+         // Get user ID from token
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Not authorized' 
+              } 
+            } 
+          };
+        }
+
+        const mockUsersString = localStorage.getItem(MOCK_USERS_KEY);
+        let currentUser = null;
+        if (mockUsersString) {
+          const allMockUsers = JSON.parse(mockUsersString);
+          currentUser = allMockUsers.find(user => user.id === userId);
+        }
+        
+        if (!currentUser) {
+          throw {
+            response: {
+              status: 404,
+              data: {
+                success: false,
+                error: 'User not found'
+              }
+            }
+          };
+        }
+        
+        // Check resume limit for free tier users
+        if (currentUser.subscriptionTier === 'free') {
+          // Get current resumes
+          const mockResumes = getMockResumes();
+          const userResumes = Array.isArray(mockResumes) ? 
+            mockResumes.filter(r => r.user === userId) : [];
+          
+          // Free tier limit: 8 resumes
+          const FREE_TIER_LIMIT = 8;
+          
+          if (userResumes.length >= FREE_TIER_LIMIT) {
+            throw {
+              response: {
+                status: 403,
+                data: {
+                  success: false,
+                  error: 'Free tier users can only have up to 8 resumes. Please upgrade your subscription to add more.',
+                  tier: 'free',
+                  limit: FREE_TIER_LIMIT,
+                  current: userResumes.length
+                }
+              }
+            };
+          }
         }
         
         // Handle FormData
@@ -493,23 +704,52 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
             }
           };
         }
+        // Safely get current resumes
+        let mockResumes = [];
+        try {
+          mockResumes = getMockResumes();
+          console.log("Current mock resumes:", mockResumes);
+        } catch (error) {
+          console.error("Error getting mock resumes:", error);
+          mockResumes = [];
+        }
+        
+        // Check if this would be the first for the user
+        const userResumes = Array.isArray(mockResumes) ? 
+          mockResumes.filter(r => r.user === userId) : [];
+        const isFirstForUser = userResumes.length === 0;
+        
         
         // Create mock resume object
         const newResume = {
-          _id: `mock-resume-${Date.now()}`,
+          _id: `${name.replace(/\s+/g, '-').toLowerCase()}-resume-${Date.now()}`,
           user: userId,
           name: name,
           file: file.name,
           version: version,
           fileSize: `${Math.round(file.size / 1024)} KB`,
-          isDefault: mockResumes.filter(r => r.user === userId).length === 0,
+          isDefault: isFirstForUser,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         
         // Add to mock resumes
         mockResumes.push(newResume);
-        saveMockResumes();
+        try {
+          saveMockResumes(mockResumes);
+          console.log("Saved new resume:", newResume);
+        } catch (error) {
+          console.error("Error saving mock resumes:", error);
+          throw {
+            response: {
+              status: 500,
+              data: {
+                success: false,
+                error: 'Error saving resume data'
+              }
+            }
+          };
+        }
         
         return {
           data: {
@@ -702,20 +942,28 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       // Handle setting a resume as default
       if (url.includes('/resumes/') && url.includes('/default')) {
         console.info('Using mock data for setting default resume');
-        
-        // Get user ID from token
-        let userId = 'mock-user';
-        const token = localStorage.getItem('token');
-        if (token && token.startsWith('mock-token-')) {
-          userId = token.split('-')[2];
+      
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Not authorized' 
+              } 
+            } 
+          };
         }
         
         // Extract resume ID from URL
         const resumeId = url.split('/')[2];
-        
-        // Find the resume
+
+         // Find the resume
+        const mockResumes = getMockResumes();        
         const resumeIndex = mockResumes.findIndex(r => r._id === resumeId && r.user === userId);
         
+        // Find the resume
         if (resumeIndex === -1) {
           throw {
             response: {
@@ -728,16 +976,16 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           };
         }
         
-        // Set all resumes as non-default first
-        mockResumes.forEach((resume, index) => {
-          if (resume.user === userId) {
-            mockResumes[index].isDefault = false;
+        // Set all resumes of this user as non-default first
+        for (let i = 0; i < mockResumes.length; i++) {
+          if (mockResumes[i].user === userId) {
+            mockResumes[i].isDefault = false;
           }
-        });
+        }
         
         // Set the selected resume as default
         mockResumes[resumeIndex].isDefault = true;
-        saveMockResumes();
+        saveMockResumes(mockResumes);
         
         return {
           data: {
@@ -765,14 +1013,24 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         console.info('Using mock data for deleting resume');
         
         // Get user ID from token
-        let userId = 'mock-user';
-        const token = localStorage.getItem('token');
-        if (token && token.startsWith('mock-token-')) {
-          userId = token.split('-')[2];
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { 
+                success: false, 
+                error: 'Not authorized' 
+              } 
+            } 
+          };
         }
         
         // Extract resume ID from URL
         const resumeId = url.split('/')[2];
+        
+        // Get all resumes
+        const mockResumes = getMockResumes();
         
         // Find the resume
         const resumeIndex = mockResumes.findIndex(r => r._id === resumeId && r.user === userId);
@@ -804,7 +1062,7 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         
         // Remove the resume
         mockResumes.splice(resumeIndex, 1);
-        saveMockResumes();
+        saveMockResumes(mockResumes);
         
         return {
           data: {
