@@ -10,8 +10,39 @@ const resumeService = {
     try {
       console.log('Fetching resumes from API...');
       const response = await api.get('/resumes');
+      
+      // Add defensive programming to handle different response formats
+      if (!response) {
+        console.warn('API response is undefined, returning empty data');
+        return { success: true, data: [], count: 0 };
+      }
+      
+      if (!response.data) {
+        console.warn('API response.data is undefined, returning empty data');
+        return { success: true, data: [], count: 0 };
+      }
+      
       console.log('Resume API response:', response.data);
-      return response.data;
+      
+      // Handle different response formats
+      if (response.data.success !== undefined) {
+        // Standard API response format
+        return response.data;
+      } else if (Array.isArray(response.data)) {
+        // Direct array response
+        return {
+          success: true,
+          data: response.data,
+          count: response.data.length
+        };
+      } else {
+        // Unknown format, wrap it
+        return {
+          success: true,
+          data: response.data.data || response.data || [],
+          count: (response.data.data || response.data || []).length
+        };
+      }
     } catch (error) {
       console.error('Error fetching resumes:', error);
       // Return empty array instead of throwing
@@ -38,6 +69,12 @@ const resumeService = {
           'Content-Type': 'multipart/form-data',
         },
       });
+      
+      // Handle response format defensively
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+      
       return response.data;
     } catch (error) {
       console.error('Error uploading resume:', error);
@@ -53,6 +90,11 @@ const resumeService = {
   getResume: async (resumeId) => {
     try {
       const response = await api.get(`/resumes/${resumeId}`);
+      
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+      
       return response.data;
     } catch (error) {
       console.error(`Error fetching resume ${resumeId}:`, error);
@@ -68,6 +110,11 @@ const resumeService = {
   setDefaultResume: async (resumeId) => {
     try {
       const response = await api.put(`/resumes/${resumeId}/default`);
+      
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+      
       return response.data;
     } catch (error) {
       console.error(`Error setting resume ${resumeId} as default:`, error);
@@ -101,6 +148,11 @@ const resumeService = {
   deleteResume: async (resumeId) => {
     try {
       const response = await api.delete(`/resumes/${resumeId}`);
+      
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+      
       return response.data;
     } catch (error) {
       console.error(`Error deleting resume ${resumeId}:`, error);

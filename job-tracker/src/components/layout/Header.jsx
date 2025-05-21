@@ -8,8 +8,14 @@ import useAuth from '@/lib/hooks/useAuth';
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false); // Add client-side flag
   const pathname = usePathname();
   const { user, isAuthenticated, logout, loading } = useAuth();
+
+  // Set client flag after hydration
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -44,6 +50,9 @@ export default function Header() {
     if (mobileMenuOpen) setMobileMenuOpen(false);
   };
 
+  // Only check authentication status after client hydration
+  const isUserAuthenticated = isClient && !loading && isAuthenticated();
+
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -65,7 +74,8 @@ export default function Header() {
               >
                 Home
               </Link>
-              {isAuthenticated() && (
+              {/* Only render authenticated navigation items on client side */}
+              {isClient && isUserAuthenticated && (
                 <>
                   <Link
                     href="/dashboard"
@@ -102,7 +112,8 @@ export default function Header() {
             </div>
           </div>
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
-            {!loading && isAuthenticated() ? (
+            {/* Only render user menu after client hydration */}
+            {isClient && !loading && isUserAuthenticated ? (
               <div className="ml-3 relative">
                 <div>
                   <button
@@ -158,7 +169,7 @@ export default function Header() {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : isClient && !loading ? (
               <div className="flex space-x-4">
                 <Link href="/auth/login" className="btn-secondary">
                   Sign in
@@ -166,6 +177,12 @@ export default function Header() {
                 <Link href="/auth/register" className="btn-primary">
                   Sign up
                 </Link>
+              </div>
+            ) : (
+              // Show loading placeholder or nothing during SSR/loading
+              <div className="flex space-x-4">
+                <div className="w-16 h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                <div className="w-16 h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
               </div>
             )}
           </div>
@@ -216,7 +233,7 @@ export default function Header() {
         </div>
       </nav>
 
-      {/* Mobile menu */}
+      {/* Mobile menu - also conditionally rendered */}
       {mobileMenuOpen && (
         <div className="sm:hidden" id="mobile-menu" onClick={(e) => e.stopPropagation()}>
           <div className="pt-2 pb-3 space-y-1">
@@ -230,7 +247,8 @@ export default function Header() {
             >
               Home
             </Link>
-            {isAuthenticated() && (
+            {/* Only render authenticated mobile nav items on client side */}
+            {isClient && isUserAuthenticated && (
               <>
                 <Link
                   href="/dashboard"
@@ -265,7 +283,8 @@ export default function Header() {
               About
             </Link>
           </div>
-          {!loading && isAuthenticated() ? (
+          {/* Mobile user section - also conditionally rendered */}
+          {isClient && !loading && isUserAuthenticated ? (
             <div className="pt-4 pb-3 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-center px-4">
                 <div className="flex-shrink-0">
@@ -303,7 +322,7 @@ export default function Header() {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : isClient && !loading ? (
             <div className="pt-4 pb-3 border-t border-gray-200 dark:border-gray-700">
               <div className="flex flex-col space-y-3 px-4">
                 <Link href="/auth/login" className="btn-secondary w-full text-center">
@@ -314,7 +333,7 @@ export default function Header() {
                 </Link>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </header>

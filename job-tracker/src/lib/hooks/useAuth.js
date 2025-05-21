@@ -32,42 +32,86 @@ export const AuthProvider = ({ children }) => {
     const initializeAuth = async () => {
       setLoading(true);
       setError(null);
+      
       try {
+
+        if (typeof window === 'undefined') {
+          setLoading(false);
+          return;
+        }
+
+        // Check if token exists in localStorage first
         const storedToken = localStorage.getItem('token');
-        if (storedToken) {
-          setToken(storedToken);
-          // Fetch current user data
-          try {
-            const response = await api.get('/auth/me');
-            if (response.data && response.data.success && response.data.user) {
-              setUser({
-                ...response.data.user,
-                passwordChangedAt: response.data.user.passwordChangedAt
-              });
-            } else {
-              // Only remove token if we get a clear negative response
-              localStorage.removeItem('token');
-              setToken(null);
-              setError('Your session has expired. Please login again.');
-            }
-          } catch (error) {
-            console.warn('Error fetching user data:', error);
+        
+        if (!storedToken) {
+          // No token, no need to make API call
+          setLoading(false);
+          return;
+        }
+        
+        // Set token from localStorage
+        setToken(storedToken);
+        
+        // Try to fetch user data with token
+        try {
+          const response = await api.get('/auth/me');
+          
+          if (response.data && response.data.success && response.data.user) {
+            setUser({
+              ...response.data.user,
+              passwordChangedAt: response.data.user.passwordChangedAt
+            });
+          } else {
+            // Clear token if API response indicates invalid session
+            localStorage.removeItem('token');
+            setToken(null);
+            setError('Your session has expired. Please login again.');
+          }
+        } catch (error) {
+          console.warn('Error fetching user data:', error);
+          
+          // Only remove token for authentication errors, not network or CORS errors
+          if (error.response && error.response.status === 401) {
+            localStorage.removeItem('token');
+            setToken(null);
+            setError('Your session has expired. Please login again.');
+          } else if (error.isCorsError || (error.message && error.message.includes('Network Error'))) {
+            // For CORS or network errors, keep the token and use mock data if available
+            console.warn('Using stored authentication state due to network/CORS issue');
             
-            // Only remove token for auth errors, not network errors
-            if (error.response && error.response.status === 401) {
-              localStorage.removeItem('token');
-              setToken(null);
-              setError('Your session has expired. Please login again.');
-            } else if (error.message && error.message.includes('Network Error')) {
-              // For network errors, keep the token but show a different message
-              console.warn('Network error when fetching user data');
-              // Don't set an error message for network issues on initial load
-              // This prevents showing error messages during temporary outages
-              // setError('Unable to connect to server. Using cached data.');
-            } else {
-              // For other errors, keep the token but show an error
-              setError('There was a problem loading your profile. Please try again later.');
+            // Check if we have a mock token
+            if (storedToken.startsWith('mock-token-')) {
+              // This is a mock token, try to get the corresponding user
+              try {
+                const mockUsersJson = localStorage.getItem('job_tracker_mock_users');
+                
+                if (mockUsersJson) {
+                  const mockUsers = JSON.parse(mockUsersJson);
+                  // Extract user id from token
+                  const userId = storedToken.split('-')[2];
+                  const mockUser = mockUsers.find(u => u.id === userId);
+                  
+                  if (mockUser) {
+                    // Use mock user data
+                    setUser({
+                      id: mockUser.id,
+                      name: mockUser.name,
+                      email: mockUser.email,
+                      subscriptionTier: mockUser.subscriptionTier || 'free',
+                      createdAt: mockUser.createdAt
+                    });
+                  }
+                }
+              } catch (e) {
+                console.error('Error retrieving mock user data:', e);
+              }
             }
+            
+            // Don't set error for network issues on initial load
+            // This prevents showing error messages during development when server isn't running
+          } else {
+            // For other errors, keep the token but show an error
+            setError('There was a problem loading your profile. Please try again later.');
           }
         }
       } catch (error) {
@@ -87,6 +131,7 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     setLoading(true);
     setError(null);
+
     try {
       const response = await api.post('/auth/register', userData);
       
@@ -101,6 +146,7 @@ export const AuthProvider = ({ children }) => {
         setToken(response.data.token);
         setUser(response.data.user);
         return response.data;
+
       } else {
         throw new Error('Registration response missing success data');
       }
@@ -158,6 +204,7 @@ export const AuthProvider = ({ children }) => {
         setToken(response.data.token);
         setUser(response.data.user);
         return response.data;
+
       } else {
         throw new Error('Login response missing success data');
       }
@@ -215,13 +262,16 @@ export const AuthProvider = ({ children }) => {
       // Continue with local logout even if an unexpected error occurs
     } finally {
       // Clear token regardless of API success/failure
-      try {
-        localStorage.removeItem('token');
-      } catch (e) {
-        console.warn('Error removing token from localStorage:', e || 'Unknown error');
+       if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('token');
+        } catch (e) {
+          console.warn('Error removing token from localStorage:', e || 'Unknown error');
+        }
       }
       setToken(null);
       setUser(null);
+      setError(null);
       setLoading(false);
       // Redirect to login
       router.push('/auth/login');
@@ -232,6 +282,7 @@ export const AuthProvider = ({ children }) => {
   const updateProfile = async (profileData) => {
     setLoading(true);
     setError(null);
+
     try {
       const response = await api.put('/auth/updateprofile', profileData);
       
@@ -270,10 +321,12 @@ export const AuthProvider = ({ children }) => {
   const forgotPassword = async (email) => {
     setLoading(true);
     setError(null);
+
     try {
       const response = await api.post('/auth/forgotpassword', { email });
       setLoading(false);
       return response.data;
+
     } catch (error) {
       console.warn('Forgot password error:', error || 'Unknown error');
       let errorMessage = 'Failed to send password reset email. Please try again.';
@@ -298,6 +351,7 @@ export const AuthProvider = ({ children }) => {
   const resetPassword = async (resetToken, password) => {
     setLoading(true);
     setError(null);
+
     try {
       const response = await api.put(`/auth/resetpassword/${resetToken}`, { password });
       
@@ -312,6 +366,7 @@ export const AuthProvider = ({ children }) => {
         setToken(response.data.token);
         setUser(response.data.user);
         return response.data;
+        
       } else {
         throw new Error('Password reset response missing success data');
       }
@@ -372,8 +427,25 @@ export const AuthProvider = ({ children }) => {
 
   // Check if user is authenticated
   const isAuthenticated = () => {
-    return !!token && !!user;
+    if (token && user) {
+      return true;
+    }
+    
+    // Only check localStorage if we're in the browser environment
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      try {
+        const storedToken = localStorage.getItem('token');
+        if (storedToken && storedToken.startsWith('mock-token-')) {
+          return true;
+        }
+      } catch (e) {
+        console.error('Error checking localStorage for authentication:', e);
+      }
+    }
+    
+    return false;
   };
+
 
   // Clear error state
   const clearError = () => {

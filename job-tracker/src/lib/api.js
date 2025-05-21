@@ -11,6 +11,8 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,
+  // Add timeout to prevent long-running requests
+  timeout: 15000,
 });
 
 // Only run in browser environment
@@ -37,26 +39,33 @@ if (typeof window !== 'undefined') {
   api.interceptors.response.use(
     (response) => response,
     (error) => {
-      // Handle CORS errors specifically
-      if (error.message && error.message.includes('Network Error')) {
-        console.warn('Possible CORS or network issue:', error.message);
+      // Check if error is CORS-related
+      const isCorsError = (
+        error.message && error.message.includes('Network Error') && 
+        !error.response
+      );
+      
+      if (isCorsError) {
+        console.warn('CORS error detected. Falling back to mock data if available.');
         
         // If error occurs during authentication check, handle gracefully
         if (error.config && error.config.url.includes('/auth/me')) {
-          console.warn('Authentication check failed due to network issue');
-          // Ensure token is still valid before removal
+          console.warn('Authentication check failed due to CORS/network issue');
+          
+          // Check if token exists before falling back to mock data
           try {
             const token = localStorage.getItem('token');
             if (token) {
-              // Don't immediately remove the token on network errors
-              // It might just be a temporary connectivity issue
+              // Keep the token on CORS errors as this is likely a development issue
+              // rather than an authentication issue
               return Promise.reject({
                 response: {
                   status: 0,
                   data: {
-                    error: 'Network error. Please check your connection.'
+                    error: 'Network error. Please check server connection and CORS configuration.'
                   }
-                }
+                },
+                isCorsError: true // Add flag to identify CORS errors
               });
             }
           } catch (e) {
@@ -67,18 +76,23 @@ if (typeof window !== 'undefined') {
       
       // Handle 401 Unauthorized errors
       if (error.response && error.response.status === 401) {
-        // Redirect to login page on unauthorized access
-        try {
-          localStorage.removeItem('token');
-        } catch (e) {
-          console.error('Error removing token from localStorage:', e);
-        }
+        // Check if this is a login attempt
+        const isLoginAttempt = error.config.url.includes('/auth/login');
         
-        if (typeof window !== 'undefined') {
-          // Use a more gentle approach than immediate redirect
-          // This prevents redirect loops
-          if (!window.location.pathname.includes('/auth/login')) {
-            window.location.href = '/auth/login';
+        if (!isLoginAttempt) {
+          // Only remove token for non-login 401 errors
+          try {
+            localStorage.removeItem('token');
+          } catch (e) {
+            console.error('Error removing token from localStorage:', e);
+          }
+          
+          if (typeof window !== 'undefined') {
+            // Use a more gentle approach than immediate redirect
+            // This prevents redirect loops
+            if (!window.location.pathname.includes('/auth/login')) {
+              window.location.href = '/auth/login';
+            }
           }
         }
       }
@@ -95,7 +109,7 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   // Create a persistent mock user store using localStorage
   const MOCK_USERS_KEY = 'job_tracker_mock_users';
   const MOCK_RESUMES_KEY = 'job_tracker_mock_resumes';
-
+  const MOCK_JOBS_KEY = 'job_tracker_mock_jobs';
   // Initialize with a default test user
   let mockUsers = [
     {
@@ -145,6 +159,14 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   }
   
+  try {
+    if (!localStorage.getItem(MOCK_JOBS_KEY)) {
+      localStorage.setItem(MOCK_JOBS_KEY, JSON.stringify([]));
+    }
+  } catch (error) {
+    console.error('Error initializing mock jobs storage:', error);
+  }
+
   // Backup original methods to allow fallthrough
   const originalGet = api.get;
   const originalPost = api.post;
@@ -160,6 +182,54 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   };
   
+   // Helper to get mock jobs
+  const getMockJobs = () => {
+    try {
+      const storedJobs = localStorage.getItem(MOCK_JOBS_KEY);
+      if (!storedJobs || storedJobs === 'undefined' || storedJobs === '') {
+        localStorage.setItem(MOCK_JOBS_KEY, JSON.stringify([]));
+        return [];
+      }
+      return JSON.parse(storedJobs);
+    } catch (error) {
+      console.error('Error retrieving mock jobs:', error);
+      try {
+        localStorage.setItem(MOCK_JOBS_KEY, JSON.stringify([]));
+      } catch (e) {
+        console.error('Error resetting mock jobs:', e);
+      }
+      return [];
+    }
+  };
+  
+  // Helper to save mock jobs
+  const saveMockJobs = (jobs) => {
+    try {
+      if (!Array.isArray(jobs)) {
+        console.error('Attempted to save non-array data as jobs:', jobs);
+        jobs = [];
+      }
+      
+      const validJobs = jobs.filter(job => {
+        return job && job._id && job.user && job.company && job.position;
+      });
+      
+      if (validJobs.length !== jobs.length) {
+        console.warn(`Filtered out ${jobs.length - validJobs.length} invalid job entries`);
+      }
+      
+      localStorage.setItem(MOCK_JOBS_KEY, JSON.stringify(validJobs));
+      console.log(`Saved ${validJobs.length} jobs to localStorage`);
+    } catch (error) {
+      console.error('Error saving mock jobs:', error);
+      try {
+        localStorage.setItem(MOCK_JOBS_KEY, JSON.stringify([]));
+      } catch (e) {
+        console.error('Error resetting mock jobs:', e);
+      }
+    }
+  };
+
   const getMockResumes = () => {
     try {
       const storedResumes = localStorage.getItem(MOCK_RESUMES_KEY);
@@ -266,6 +336,9 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   // Wrap API methods with mock data handling
   api.get = async function(url, config) {
     try {
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second timeout
       // Try the real API first
       return await originalGet.call(this, url, config);
     } catch (error) {
@@ -275,6 +348,262 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         console.warn(`Network error when calling ${url}. Using mock data instead.`);
       } else {
         console.warn(`API call to ${url} failed, using mock data`, error);
+      }
+      
+      if (url === '/jobs' || url.startsWith('/jobs?')) {
+          console.info('Using mock data for get jobs');
+          const userId = getCurrentUserId();
+          if (!userId) {
+            throw { 
+              response: { 
+                status: 401, 
+                data: { success: false, error: 'Not authorized' } 
+              } 
+            };
+          }
+
+          // Parse query parameters
+          const urlObj = new URL('http://localhost' + url);
+          const params = urlObj.searchParams;
+          const status = params.get('status');
+          const jobType = params.get('jobType');
+          const search = params.get('search');
+          const sortBy = params.get('sortBy') || 'updatedAt';
+          const sortOrder = params.get('sortOrder') || 'desc';
+
+          // Get all jobs for user
+          const mockJobs = getMockJobs();
+          let userJobs = mockJobs.filter(job => job.user === userId);
+
+          // Apply filters
+          if (status) {
+            userJobs = userJobs.filter(job => job.status === status);
+          }
+          
+          if (jobType) {
+            userJobs = userJobs.filter(job => job.jobType === jobType);
+          }
+          
+          if (search) {
+            const searchLower = search.toLowerCase();
+            userJobs = userJobs.filter(job => 
+              job.company.toLowerCase().includes(searchLower) ||
+              job.position.toLowerCase().includes(searchLower) ||
+              job.location.toLowerCase().includes(searchLower) ||
+              (job.notes && job.notes.toLowerCase().includes(searchLower)) ||
+              (job.tags && job.tags.some(tag => tag.toLowerCase().includes(searchLower)))
+            );
+          }
+
+          // Apply sorting
+          userJobs.sort((a, b) => {
+            let aValue = a[sortBy];
+            let bValue = b[sortBy];
+            
+            // Handle date sorting
+            if (sortBy.includes('Date') || sortBy.includes('At')) {
+              aValue = new Date(aValue).getTime();
+              bValue = new Date(bValue).getTime();
+            }
+            
+            // Handle string sorting
+            if (typeof aValue === 'string' && typeof bValue === 'string') {
+              aValue = aValue.toLowerCase();
+              bValue = bValue.toLowerCase();
+            }
+            
+            if (sortOrder === 'desc') {
+              return bValue > aValue ? 1 : bValue < aValue ? -1 : 0;
+            } else {
+              return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+            }
+          });
+
+          return {
+            data: {
+              success: true,
+              count: userJobs.length,
+              data: userJobs
+            }
+          };
+      }
+      
+      if (url === '/jobs/stats') {
+        console.info('Using mock data for job stats');
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { success: false, error: 'Not authorized' } 
+            } 
+          };
+        }
+
+        const mockJobs = getMockJobs();
+        const userJobs = mockJobs.filter(job => job.user === userId);
+
+        // Calculate stats
+        const stats = {
+          total: userJobs.length,
+          'Saved': 0,
+          'Applied': 0,
+          'Phone Screen': 0,
+          'Interview': 0,
+          'Technical Assessment': 0,
+          'Offer': 0,
+          'Rejected': 0,
+          'Withdrawn': 0
+        };
+
+        userJobs.forEach(job => {
+          stats[job.status] = (stats[job.status] || 0) + 1;
+        });
+
+        return {
+          data: {
+            success: true,
+            data: stats
+          }
+        };
+      }
+      
+      if (url === '/jobs/recent' || url.startsWith('/jobs/recent?')) {
+        console.info('Using mock data for recent activity');
+    
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { success: false, error: 'Not authorized' } 
+            } 
+          };
+        }
+
+        // Parse limit parameter
+        const urlObj = new URL('http://localhost' + url);
+        const limit = parseInt(urlObj.searchParams.get('limit')) || 10;
+
+        const mockJobs = getMockJobs();
+        const userJobs = mockJobs.filter(job => job.user === userId);
+
+        // Sort by updatedAt and limit
+        const recentJobs = userJobs
+          .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+          .slice(0, limit);
+
+        // Transform to activity format
+        const activities = recentJobs.map(job => {
+          let type = 'Status Change';
+          let date = job.updatedAt;
+          
+          // Determine activity type
+          const createdTime = new Date(job.createdAt).getTime();
+          const updatedTime = new Date(job.updatedAt).getTime();
+          const appTime = job.applicationDate ? new Date(job.applicationDate).getTime() : null;
+          
+          if (Math.abs(createdTime - updatedTime) < 60000) {
+            type = 'Job Added';
+          } else if (appTime && Math.abs(appTime - updatedTime) < 60000) {
+            type = 'Application Submitted';
+          }
+          
+          return {
+            id: job._id,
+            date,
+            company: job.company,
+            position: job.position,
+            status: job.status,
+            type
+          };
+        });
+
+        return {
+          data: {
+            success: true,
+            count: activities.length,
+            data: activities
+          }
+        };
+      }
+      
+      if (url.startsWith('/jobs/') && !url.includes('/stats') && !url.includes('/recent')) {
+        console.info('Using mock data for get jobs');
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { success: false, error: 'Not authorized' } 
+            } 
+          };
+        }
+
+        // Parse query parameters
+        const urlObj = new URL('http://localhost' + url);
+        const params = urlObj.searchParams;
+        const status = params.get('status');
+        const jobType = params.get('jobType');
+        const search = params.get('search');
+        const sortBy = params.get('sortBy') || 'updatedAt';
+        const sortOrder = params.get('sortOrder') || 'desc';
+
+        // Get all jobs for user
+        const mockJobs = getMockJobs();
+        let userJobs = mockJobs.filter(job => job.user === userId);
+
+        // Apply filters
+        if (status) {
+          userJobs = userJobs.filter(job => job.status === status);
+        }
+        
+        if (jobType) {
+          userJobs = userJobs.filter(job => job.jobType === jobType);
+        }
+        
+        if (search) {
+          const searchLower = search.toLowerCase();
+          userJobs = userJobs.filter(job => 
+            job.company.toLowerCase().includes(searchLower) ||
+            job.position.toLowerCase().includes(searchLower) ||
+            job.location.toLowerCase().includes(searchLower) ||
+            (job.notes && job.notes.toLowerCase().includes(searchLower)) ||
+            (job.tags && job.tags.some(tag => tag.toLowerCase().includes(searchLower)))
+          );
+        }
+
+        // Apply sorting
+        userJobs.sort((a, b) => {
+          let aValue = a[sortBy];
+          let bValue = b[sortBy];
+          
+          // Handle date sorting
+          if (sortBy.includes('Date') || sortBy.includes('At')) {
+            aValue = new Date(aValue).getTime();
+            bValue = new Date(bValue).getTime();
+          }
+          
+          // Handle string sorting
+          if (typeof aValue === 'string' && typeof bValue === 'string') {
+            aValue = aValue.toLowerCase();
+            bValue = bValue.toLowerCase();
+          }
+          
+          if (sortOrder === 'desc') {
+            return bValue > aValue ? 1 : bValue < aValue ? -1 : 0;
+          } else {
+            return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+          }
+        });
+
+        return {
+          data: {
+            success: true,
+            count: userJobs.length,
+            data: userJobs
+          }
+        };
       }
       
       // Mock responses based on URL
@@ -759,6 +1088,68 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         };
       }
 
+      else if (url === '/jobs') {
+        console.info('Using mock data for create job');
+    
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { success: false, error: 'Not authorized' } 
+            } 
+          };
+        }
+
+        // Validate required fields
+        const { company, position, location, status } = data;
+        if (!company || !position || !location || !status) {
+          throw {
+            response: {
+              status: 400,
+              data: {
+                success: false,
+                error: 'Please provide company, position, location, and status'
+              }
+            }
+          };
+        }
+
+        // Create new job
+        const newJob = {
+          _id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          user: userId,
+          company: data.company,
+          position: data.position,
+          location: data.location,
+          status: data.status,
+          jobType: data.jobType || 'Full-time',
+          applicationDate: data.applicationDate || new Date().toISOString(),
+          url: data.url || '',
+          salary: data.salary || '',
+          contactName: data.contactName || '',
+          contactEmail: data.contactEmail || '',
+          contactPhone: data.contactPhone || '',
+          description: data.description || '',
+          notes: data.notes || '',
+          tags: data.tags || [],
+          resume: data.resume || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        // Save to mock storage
+        const mockJobs = getMockJobs();
+        mockJobs.push(newJob);
+        saveMockJobs(mockJobs);
+
+        return {
+          data: {
+            success: true,
+            data: newJob
+          }
+        };
+      }
       throw error;
     }
   };
@@ -994,6 +1385,53 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           }
         };
       }
+
+      else if (url.startsWith('/jobs/') && !url.includes('/default')) {
+        console.info('Using mock data for update job');
+    
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { success: false, error: 'Not authorized' } 
+            } 
+          };
+        }
+
+        // Extract job ID from URL
+        const jobId = url.split('/')[2];
+        
+        const mockJobs = getMockJobs();
+        const jobIndex = mockJobs.findIndex(j => j._id === jobId && j.user === userId);
+        
+        if (jobIndex === -1) {
+          throw {
+            response: {
+              status: 404,
+              data: { success: false, error: 'Job not found' }
+            }
+          };
+        }
+
+        // Update job
+        const updatedJob = {
+          ...mockJobs[jobIndex],
+          ...data,
+          updatedAt: new Date().toISOString()
+        };
+
+        mockJobs[jobIndex] = updatedJob;
+        saveMockJobs(mockJobs);
+
+        return {
+          data: {
+            success: true,
+            data: updatedJob
+          }
+        };
+      }
+
       
       // For other URLs, let the error propagate
       throw error;
@@ -1071,10 +1509,51 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           }
         };
       }
+
+      if (url.startsWith('/jobs/')) {
+        console.info('Using mock data for delete job');
+    
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { success: false, error: 'Not authorized' } 
+            } 
+          };
+        }
+
+        // Extract job ID from URL
+        const jobId = url.split('/')[2];
+        
+        const mockJobs = getMockJobs();
+        const jobIndex = mockJobs.findIndex(j => j._id === jobId && j.user === userId);
+        
+        if (jobIndex === -1) {
+          throw {
+            response: {
+              status: 404,
+              data: { success: false, error: 'Job not found' }
+            }
+          };
+        }
+
+        // Remove job
+        mockJobs.splice(jobIndex, 1);
+        saveMockJobs(mockJobs);
+
+        return {
+          data: {
+            success: true,
+            data: {}
+          }
+        };
+      }
       
       throw error;
     }
   };
+  
 }
 
 export default api;
