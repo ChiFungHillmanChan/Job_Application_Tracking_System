@@ -10,7 +10,14 @@
 │   │   │   ├── authController.js
 │   │   │   ├── jobController.js
 │   │   │   └── resumeController.js
+│   │   ├── debug-cors-server.js
+│   │   ├── env-check.js
+│   │   ├── full-debug-server.js
+│   │   ├── import-test.js
+│   │   ├── inspect-path-to-regexp.js
 │   │   ├── logs
+│   │   │   ├── combined.log
+│   │   │   └── error.log
 │   │   ├── middleware
 │   │   │   ├── auth.js
 │   │   │   └── error.js
@@ -20,15 +27,23 @@
 │   │   │   └── User.js
 │   │   ├── package-lock.json
 │   │   ├── package.json
+│   │   ├── route-by-route-server.js
+│   │   ├── route-debug.server.js
+│   │   ├── route-file-checker.js
 │   │   ├── routes
 │   │   │   ├── auth.js
 │   │   │   ├── jobs.js
 │   │   │   └── resumes.js
 │   │   ├── server.js
-│   │   └── utils
-│   │       ├── logger.js
-│   │       ├── sendEmail.js
-│   │       └── tokenManager.js
+│   │   ├── simple-cors-test.js
+│   │   ├── test-server.js
+│   │   ├── trace-error-source.js
+│   │   ├── ultra-minimal-server.js
+│   │   ├── utils
+│   │   │   ├── logger.js
+│   │   │   ├── sendEmail.js
+│   │   │   └── tokenManager.js
+│   │   └── version-check.js
 │   ├── eslint.config.mjs
 │   ├── jsconfig.json
 │   ├── next.config.js
@@ -72,6 +87,10 @@
 │   │   │   │       └── [token]
 │   │   │   │           └── pages.jsx
 │   │   │   ├── dashboard
+│   │   │   │   ├── jobs
+│   │   │   │   │   ├── new
+│   │   │   │   │   │   └── page.jsx
+│   │   │   │   │   └── page.jsx
 │   │   │   │   ├── layout.jsx
 │   │   │   │   └── page.jsx
 │   │   │   ├── favicon.ico
@@ -98,6 +117,7 @@
 │   │   │   ├── DashboardError.jsx
 │   │   │   ├── forms
 │   │   │   │   ├── ForgotPasswordForm.jsx
+│   │   │   │   ├── JobForm.jsx
 │   │   │   │   ├── LoginForm.jsx
 │   │   │   │   └── RegisterForm.jsx
 │   │   │   ├── layout
@@ -115,6 +135,7 @@
 │   │   │   ├── authDebug.js
 │   │   │   ├── hooks
 │   │   │   │   └── useAuth.js
+│   │   │   ├── jobService.js
 │   │   │   ├── resumeService.js
 │   │   │   ├── utils
 │   │   │   └── withAuth.js
@@ -122,3 +143,5 @@
 │   │       └── globals.css
 │   └── tailwind.config.js
 └── README.md
+
+47 directories, 98 files

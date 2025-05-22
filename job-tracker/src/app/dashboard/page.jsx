@@ -1,22 +1,34 @@
+// app/dashboard/page.jsx
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import withAuth from '@/lib/withAuth';
 import useAuth from '@/lib/hooks/useAuth';
+import jobService from '@/lib/jobService';
 import DashboardError from '@/components/DashboardError';
 
 function Dashboard() {
   const { user, error: authError } = useAuth();
+  const searchParams = useSearchParams();
+  const successMessage = searchParams.get('success');
+  
   const [dashboardError, setDashboardError] = useState(authError);
   const [stats, setStats] = useState({
     total: 0,
-    saved: 0,
-    applied: 0,
-    interview: 0,
-    offer: 0,
-    rejected: 0
+    'Saved': 0,
+    'Applied': 0,
+    'Phone Screen': 0,
+    'Interview': 0,
+    'Technical Assessment': 0,
+    'Offer': 0,
+    'Rejected': 0,
+    'Withdrawn': 0
   });
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [successAlert, setSuccessAlert] = useState(successMessage);
 
   // Update dashboardError when authError changes
   useEffect(() => {
@@ -25,59 +37,49 @@ function Dashboard() {
     }
   }, [authError]);
 
-  // This would be replaced with a real API call in production
+  // Load dashboard data
   useEffect(() => {
-    // Simulating API call to get job statistics
-    const mockStats = {
-      total: 12,
-      saved: 2,
-      applied: 5,
-      interview: 3,
-      offer: 1,
-      rejected: 1
+    const loadDashboardData = async () => {
+      setLoading(true);
+      try {
+        // Load statistics and recent activity in parallel
+        const [statsResponse, activityResponse] = await Promise.all([
+          jobService.getJobStats(),
+          jobService.getRecentActivity(4) // Get last 4 activities for dashboard
+        ]);
+
+        if (statsResponse && statsResponse.success) {
+          setStats(statsResponse.data);
+        }
+
+        if (activityResponse && activityResponse.success) {
+          setRecentActivity(activityResponse.data);
+        }
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        // Don't show error for dashboard data loading issues
+        // Users can still navigate and use other features
+      } finally {
+        setLoading(false);
+      }
     };
-    
-    setStats(mockStats);
+
+    loadDashboardData();
   }, []);
 
-  // Recent job activity (mock data)
-  const recentActivity = [
-    {
-      id: '1',
-      date: new Date(2023, 10, 15),
-      company: 'Tech Solutions Inc.',
-      position: 'Senior Frontend Developer',
-      status: 'Interview',
-      type: 'Status Change'
-    },
-    {
-      id: '2',
-      date: new Date(2023, 10, 14),
-      company: 'Data Systems Corp',
-      position: 'Software Engineer',
-      status: 'Applied',
-      type: 'Application Submitted'
-    },
-    {
-      id: '3',
-      date: new Date(2023, 10, 12),
-      company: 'Innovative AI',
-      position: 'Full Stack Developer',
-      status: 'Saved',
-      type: 'Job Saved'
-    },
-    {
-      id: '4',
-      date: new Date(2023, 10, 10),
-      company: 'Cloud Networks',
-      position: 'React Developer',
-      status: 'Rejected',
-      type: 'Status Change'
+  // Auto-hide success message after 5 seconds
+  useEffect(() => {
+    if (successAlert) {
+      const timer = setTimeout(() => {
+        setSuccessAlert(null);
+      }, 5000);
+      return () => clearTimeout(timer);
     }
-  ];
+  }, [successAlert]);
 
   // Format date
-  const formatDate = (date) => {
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
     return new Intl.DateTimeFormat('en-US', { 
       month: 'short', 
       day: 'numeric',
@@ -108,6 +110,24 @@ function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      {/* Success Message */}
+      {successAlert && (
+        <div className="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded-md dark:bg-green-900 dark:text-green-300 dark:border-green-800">
+          <div className="flex justify-between items-center">
+            <span>{successAlert}</span>
+            <button 
+              onClick={() => setSuccessAlert(null)}
+              className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+            >
+              <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dashboard Error */}
       {dashboardError && (
         <DashboardError 
           error={dashboardError} 
@@ -140,7 +160,7 @@ function Dashboard() {
                 </dt>
                 <dd className="flex items-baseline">
                   <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                    {stats.total}
+                    {loading ? '...' : stats.total}
                   </div>
                 </dd>
               </div>
@@ -169,7 +189,7 @@ function Dashboard() {
                 </dt>
                 <dd className="flex items-baseline">
                   <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                    {stats.saved}
+                    {loading ? '...' : stats['Saved']}
                   </div>
                 </dd>
               </div>
@@ -198,7 +218,7 @@ function Dashboard() {
                 </dt>
                 <dd className="flex items-baseline">
                   <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                    {stats.applied}
+                    {loading ? '...' : stats['Applied']}
                   </div>
                 </dd>
               </div>
@@ -227,7 +247,7 @@ function Dashboard() {
                 </dt>
                 <dd className="flex items-baseline">
                   <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                    {stats.interview}
+                    {loading ? '...' : (stats['Phone Screen'] + stats['Interview'] + stats['Technical Assessment'])}
                   </div>
                 </dd>
               </div>
@@ -256,7 +276,7 @@ function Dashboard() {
                 </dt>
                 <dd className="flex items-baseline">
                   <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                    {stats.offer}
+                    {loading ? '...' : stats['Offer']}
                   </div>
                 </dd>
               </div>
@@ -285,7 +305,7 @@ function Dashboard() {
                 </dt>
                 <dd className="flex items-baseline">
                   <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                    {stats.rejected}
+                    {loading ? '...' : (stats['Rejected'] + stats['Withdrawn'])}
                   </div>
                 </dd>
               </div>
@@ -350,51 +370,84 @@ function Dashboard() {
       <div className="mt-10">
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">Recent Activity</h2>
         <div className="mt-5 bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
-          <ul role="list" className="divide-y divide-gray-200 dark:divide-gray-700">
-            {recentActivity.map((activity) => (
-              <li key={activity.id}>
-                <Link href={`/dashboard/jobs/${activity.id}`}>
-                  <div className="block hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <div className="px-4 py-4 sm:px-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <p className="text-sm font-medium text-primary-600 dark:text-primary-400 truncate">
-                            {activity.company}
-                          </p>
-                          <div className="ml-2 flex-shrink-0 flex">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(activity.status)}`}>
-                              {activity.status}
-                            </span>
+          {loading ? (
+            <div className="px-4 py-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading recent activity...</p>
+            </div>
+          ) : recentActivity.length > 0 ? (
+            <ul role="list" className="divide-y divide-gray-200 dark:divide-gray-700">
+              {recentActivity.map((activity) => (
+                <li key={activity.id}>
+                  <Link href={`/dashboard/jobs/${activity.id}`}>
+                    <div className="block hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <div className="px-4 py-4 sm:px-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <p className="text-sm font-medium text-primary-600 dark:text-primary-400 truncate">
+                              {activity.company}
+                            </p>
+                            <div className="ml-2 flex-shrink-0 flex">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(activity.status)}`}>
+                                {activity.status}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="ml-2 flex-shrink-0 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                            <span>{formatDate(activity.date)}</span>
                           </div>
                         </div>
-                        <div className="ml-2 flex-shrink-0 flex items-center text-sm text-gray-500 dark:text-gray-400">
-                          <span>{formatDate(activity.date)}</span>
-                        </div>
-                      </div>
-                      <div className="mt-2 sm:flex sm:justify-between">
-                        <div className="sm:flex">
-                          <p className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                            {activity.position}
-                          </p>
-                        </div>
-                        <div className="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400 sm:mt-0">
-                          <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400 dark:text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                          </svg>
-                          <span>{activity.type}</span>
+                        <div className="mt-2 sm:flex sm:justify-between">
+                          <div className="sm:flex">
+                            <p className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                              {activity.position}
+                            </p>
+                          </div>
+                          <div className="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400 sm:mt-0">
+                            <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400 dark:text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                            <span>{activity.type}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="px-4 py-8 text-center">
+              <svg className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No recent activity</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Get started by adding your first job application.
+              </p>
+              <div className="mt-6">
+                <Link href="/dashboard/jobs/new" className="btn-primary">
+                  Add New Application
                 </Link>
-              </li>
-            ))}
-          </ul>
+              </div>
+            </div>
+          )}
         </div>
+        
+        {recentActivity.length > 0 && (
+          <div className="mt-4 text-center">
+            <Link 
+              href="/dashboard/jobs" 
+              className="text-sm text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+            >
+              View all job applications →
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* No Applications State (conditionally rendered) */}
-      {stats.total === 0 && (
+      {!loading && stats.total === 0 && (
         <div className="mt-10 bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
           <div className="px-4 py-12 sm:px-6 text-center">
             <svg className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
