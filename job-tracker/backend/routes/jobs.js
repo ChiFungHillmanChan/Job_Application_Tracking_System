@@ -21,12 +21,12 @@ router.get('/recent', getRecentActivity);
 
 // Main job CRUD routes
 router.route('/')
-  .get(getJobs)      // GET /api/jobs - Get all jobs for user with filtering
-  .post(createJob);  // POST /api/jobs - Create new job
+  .get(getJobs)     
+  .post(createJob); 
 
 router.route('/:id')
-  .get(getJob)       // GET /api/jobs/:id - Get single job
-  .put(updateJob)    // PUT /api/jobs/:id - Update job
-  .delete(deleteJob); // DELETE /api/jobs/:id - Delete job
+  .get(getJob)       
+  .put(updateJob)   
+  .delete(deleteJob); 
 
 module.exports = router;
