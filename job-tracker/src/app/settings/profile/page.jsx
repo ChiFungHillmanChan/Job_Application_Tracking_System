@@ -5,94 +5,47 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import withAuth from '@/lib/withAuth';
 import Link from 'next/link';
 
-function AccountSettings() {
-  const { user, logout } = useAuth();
+function ProfileSettings() {
+  const { user } = useAuth();
   
-  // State for password reset section
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
+  const [formData, setFormData] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    jobTitle: user?.jobTitle || '',
+    location: user?.location || '',
+    bio: user?.bio || ''
   });
-  const [showPasswords, setShowPasswords] = useState(false);
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
-
-  // State for delete account confirmation
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   
-  const handlePasswordChange = (e) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [formSuccess, setFormSuccess] = useState('');
+  
+  const handleChange = (e) => {
     const { name, value } = e.target;
-    setPasswordData((prev) => ({
+    setFormData((prev) => ({
       ...prev,
       [name]: value
     }));
   };
-
-  const togglePasswordVisibility = () => {
-    setShowPasswords(!showPasswords);
-  };
-
-  const handlePasswordSubmit = async (e) => {
+  
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setPasswordError('');
-    setPasswordSuccess('');
-    
-    // Validation
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-      setPasswordError('All fields are required');
-      return;
-    }
-    
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setPasswordError('New passwords do not match');
-      return;
-    }
-    
-    if (passwordData.newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters');
-      return;
-    }
+    setFormError('');
+    setFormSuccess('');
     
     try {
       // This would be a real API call in production
-      // await api.put('/api/users/password', passwordData);
+      // await updateProfile(formData);
       
       // For demo purposes, we'll just simulate success
       setTimeout(() => {
-        setPasswordSuccess('Password updated successfully');
-        setPasswordData({
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        });
-        setShowPasswordForm(false);
+        setFormSuccess('Profile updated successfully');
+        setIsEditing(false);
       }, 1000);
       
     } catch (error) {
-      console.error('Error changing password:', error);
-      setPasswordError(error.response?.data?.error || 'Failed to update password');
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (deleteConfirmInput !== 'delete my account') {
-      return;
-    }
-    
-    try {
-      // This would be a real API call in production
-      // await api.delete('/api/users/account');
-      
-      // For demo purposes, we'll just log out
-      setTimeout(() => {
-        logout();
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Error deleting account:', error);
+      console.error('Error updating profile:', error);
+      setFormError(error.response?.data?.error || 'Failed to update profile');
     }
   };
 
@@ -120,263 +73,328 @@ function AccountSettings() {
       </div>
       
       <header className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Account Settings</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          Manage your account security and preferences
+          Update your personal information
         </p>
       </header>
 
-      <div className="space-y-8">
-        {/* Account Info Section */}
-        <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Account Information</h3>
-          </div>
-          <div className="px-6 py-5">
-            <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-              <div>
-                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</dt>
-                <dd className="mt-1 text-sm text-gray-900 dark:text-white">{user?.email || 'example@email.com'}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Account Type</dt>
-                <dd className="mt-1 text-sm text-gray-900 dark:text-white capitalize">{user?.subscriptionTier || 'Free'}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Account Created</dt>
-                <dd className="mt-1 text-sm text-gray-900 dark:text-white">
-                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'January 1, 2023'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Authentication Method</dt>
-                <dd className="mt-1 text-sm text-gray-900 dark:text-white">
-                  {user?.googleId ? 'Google' : user?.appleId ? 'Apple' : 'Email & Password'}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-
-        {/* Password Section */}
-        <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Password</h3>
+      <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Personal Information</h3>
+          
+          {!isEditing && (
             <button
-              onClick={() => setShowPasswordForm(!showPasswordForm)}
+              onClick={() => setIsEditing(true)}
               className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-primary-600 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-primary-900 dark:text-primary-300 dark:hover:bg-primary-800"
             >
-              {showPasswordForm ? 'Cancel' : 'Change Password'}
+              Edit Profile
             </button>
-          </div>
-          <div className="px-6 py-5">
-            {!showPasswordForm ? (
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {user?.googleId || user?.appleId ? 
-                  'You are using social login and do not have a password set.' : 
-                  'Your password was last changed on [date]. For security, consider changing it regularly.'}
-              </p>
-            ) : (
-              <form onSubmit={handlePasswordSubmit} className="space-y-6">
-                {passwordError && (
-                  <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm dark:bg-red-900 dark:text-red-300">
-                    {passwordError}
-                  </div>
-                )}
-                {passwordSuccess && (
-                  <div className="p-3 bg-green-100 text-green-700 rounded-md text-sm dark:bg-green-900 dark:text-green-300">
-                    {passwordSuccess}
-                  </div>
-                )}
-
-                <div>
-                  <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Current Password
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      id="currentPassword"
-                      name="currentPassword"
-                      type={showPasswords ? 'text' : 'password'}
-                      required
-                      value={passwordData.currentPassword}
-                      onChange={handlePasswordChange}
-                      className="input-field"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    New Password
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      id="newPassword"
-                      name="newPassword"
-                      type={showPasswords ? 'text' : 'password'}
-                      required
-                      value={passwordData.newPassword}
-                      onChange={handlePasswordChange}
-                      className="input-field"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Confirm New Password
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type={showPasswords ? 'text' : 'password'}
-                      required
-                      value={passwordData.confirmPassword}
-                      onChange={handlePasswordChange}
-                      className="input-field"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center">
-                  <input
-                    id="showPasswords"
-                    name="showPasswords"
-                    type="checkbox"
-                    checked={showPasswords}
-                    onChange={togglePasswordVisibility}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="showPasswords" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                    Show passwords
-                  </label>
-                </div>
-
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-primary-700 dark:hover:bg-primary-600"
-                  >
-                    Update Password
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
+          )}
         </div>
-
-        {/* Connected Accounts Section */}
-        <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Connected Accounts</h3>
-          </div>
-          <div className="px-6 py-5">
-            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-              <li className="py-4 flex items-center justify-between">
-                <div className="flex items-center">
-                  <svg className="h-6 w-6 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z" />
-                  </svg>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Google</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {user?.googleId ? 'Connected' : 'Not connected'}
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md ${
-                    user?.googleId 
-                      ? 'text-gray-700 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600' 
-                      : 'text-primary-600 bg-primary-100 hover:bg-primary-200 dark:bg-primary-900 dark:text-primary-300 dark:hover:bg-primary-800'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500`}
-                >
-                  {user?.googleId ? 'Disconnect' : 'Connect'}
-                </button>
-              </li>
-              <li className="py-4 flex items-center justify-between">
-                <div className="flex items-center">
-                  <svg className="h-6 w-6 text-gray-900 dark:text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.74 3.51 7.1 8.66 6.89c1.33.07 2.23.82 3.05.82.92 0 1.92-.88 3.38-.83 1.36.05 2.39.35 3.12 1.35-2.61 1.54-2.2 5.04.84 6.05-.67 1.97-1.9 3.93-4 6zm-5.18-15c-.04 1.72 1.27 3.27 2.96 3.35-1.12 0-2.45-1.32-2.96-3.35" />
-                  </svg>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Apple</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {user?.appleId ? 'Connected' : 'Not connected'}
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md ${
-                    user?.appleId 
-                      ? 'text-gray-700 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600' 
-                      : 'text-primary-600 bg-primary-100 hover:bg-primary-200 dark:bg-primary-900 dark:text-primary-300 dark:hover:bg-primary-800'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500`}
-                >
-                  {user?.appleId ? 'Disconnect' : 'Connect'}
-                </button>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Danger Zone Section */}
-        <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-medium text-red-600 dark:text-red-400">Danger Zone</h3>
-          </div>
-          <div className="px-6 py-5">
-            <div className="border border-red-200 rounded-lg p-4 dark:border-red-900">
-              <h4 className="text-base font-medium text-gray-900 dark:text-white">Delete Account</h4>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Once you delete your account, all of your data will be permanently removed. This action cannot be undone.
-              </p>
-              
-              {!showDeleteConfirm ? (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800"
-                >
-                  Delete Account
-                </button>
-              ) : (
-                <div className="mt-4 space-y-4">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    To confirm, type "delete my account" below:
-                  </p>
+        
+        <div className="px-6 py-5">
+          {formError && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-sm dark:bg-red-900 dark:text-red-300">
+              {formError}
+            </div>
+          )}
+          
+          {formSuccess && (
+            <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md text-sm dark:bg-green-900 dark:text-green-300">
+              {formSuccess}
+            </div>
+          )}
+          
+          {isEditing ? (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Full Name
+                </label>
+                <div className="mt-1">
                   <input
+                    id="name"
+                    name="name"
                     type="text"
-                    value={deleteConfirmInput}
-                    onChange={(e) => setDeleteConfirmInput(e.target.value)}
-                    placeholder="delete my account"
+                    required
+                    value={formData.name}
+                    onChange={handleChange}
                     className="input-field"
                   />
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={handleDeleteAccount}
-                      disabled={deleteConfirmInput !== 'delete my account'}
-                      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md ${
-                        deleteConfirmInput === 'delete my account'
-                          ? 'text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600'
-                          : 'text-red-700 bg-red-100 opacity-50 cursor-not-allowed dark:bg-red-900 dark:text-red-300'
-                      } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500`}
-                    >
-                      Permanently Delete
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowDeleteConfirm(false);
-                        setDeleteConfirmInput('');
-                      }}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Email Address
+                </label>
+                <div className="mt-1">
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={handleChange}
+                    disabled={user?.googleId || user?.appleId}
+                    className={`input-field ${(user?.googleId || user?.appleId) ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                  />
+                  {(user?.googleId || user?.appleId) && (
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Email cannot be changed when using social login.
+                    </p>
+                  )}
+                </div>
+              </div>
+              
+              <div>
+                <label htmlFor="jobTitle" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Job Title (Optional)
+                </label>
+                <div className="mt-1">
+                  <input
+                    id="jobTitle"
+                    name="jobTitle"
+                    type="text"
+                    value={formData.jobTitle}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="e.g. Software Engineer"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Location (Optional)
+                </label>
+                <div className="mt-1">
+                  <input
+                    id="location"
+                    name="location"
+                    type="text"
+                    value={formData.location}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="e.g. San Francisco, CA"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label htmlFor="bio" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Bio (Optional)
+                </label>
+                <div className="mt-1">
+                  <textarea
+                    id="bio"
+                    name="bio"
+                    rows={4}
+                    value={formData.bio}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="Tell us a little about yourself..."
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Brief description for your profile. URLs are hyperlinked.
+                </p>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setFormData({
+                      name: user?.name || '',
+                      email: user?.email || '',
+                      jobTitle: user?.jobTitle || '',
+                      location: user?.location || '',
+                      bio: user?.bio || ''
+                    });
+                  }}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-primary-700 dark:hover:bg-primary-600"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          ) : (
+            <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Full Name</dt>
+                <dd className="mt-1 text-sm text-gray-900 dark:text-white">{formData.name}</dd>
+              </div>
+              
+              <div className="sm:col-span-2">
+                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Email Address</dt>
+                <dd className="mt-1 text-sm text-gray-900 dark:text-white">{formData.email}</dd>
+              </div>
+              
+              {formData.jobTitle && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Job Title</dt>
+                  <dd className="mt-1 text-sm text-gray-900 dark:text-white">{formData.jobTitle}</dd>
                 </div>
               )}
+              
+              {formData.location && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Location</dt>
+                  <dd className="mt-1 text-sm text-gray-900 dark:text-white">{formData.location}</dd>
+                </div>
+              )}
+              
+              {formData.bio && (
+                <div className="sm:col-span-2">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Bio</dt>
+                  <dd className="mt-1 text-sm text-gray-900 dark:text-white whitespace-pre-line">{formData.bio}</dd>
+                </div>
+              )}
+            </dl>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-8 bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Profile Picture</h3>
+        </div>
+        <div className="px-6 py-5">
+          <div className="flex items-center">
+            <div className="h-24 w-24 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+              {user?.name ? (
+                <span className="text-3xl font-medium text-gray-600 dark:text-gray-300">
+                  {user.name.charAt(0)}
+                </span>
+              ) : (
+                <svg className="h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              )}
+            </div>
+            <div className="ml-5">
+              <div className="text-sm font-medium text-gray-900 dark:text-white">Add a photo to your profile</div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                JPG, GIF or PNG. Max size of 800K
+              </p>
+              <div className="mt-3 flex space-x-3">
+                <button
+                  type="button"
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-primary-600 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-primary-900 dark:text-primary-300 dark:hover:bg-primary-800"
+                >
+                  Upload
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-8 bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Job Preferences</h3>
+        </div>
+        <div className="px-6 py-5">
+          <div className="mt-4 space-y-6">
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white">Job Types</h4>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Select the types of roles you're interested in
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {['Full-time', 'Part-time', 'Contract', 'Internship', 'Remote', 'Hybrid'].map((type) => (
+                  <div key={type} className="flex items-center">
+                    <input
+                      id={`job-type-${type.toLowerCase()}`}
+                      name={`job-type-${type.toLowerCase()}`}
+                      type="checkbox"
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor={`job-type-${type.toLowerCase()}`} className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      {type}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white">Salary Range</h4>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Set your preferred salary range
+              </p>
+              <div className="mt-2 flex space-x-4">
+                <div className="w-1/2">
+                  <select
+                    id="minimum-salary"
+                    name="minimum-salary"
+                    className="input-field"
+                  >
+                    <option value="">Minimum</option>
+                    <option value="30000">$30,000</option>
+                    <option value="50000">$50,000</option>
+                    <option value="70000">$70,000</option>
+                    <option value="90000">$90,000</option>
+                    <option value="120000">$120,000</option>
+                    <option value="150000">$150,000+</option>
+                  </select>
+                </div>
+                <div className="w-1/2">
+                  <select
+                    id="maximum-salary"
+                    name="maximum-salary"
+                    className="input-field"
+                  >
+                    <option value="">Maximum</option>
+                    <option value="50000">$50,000</option>
+                    <option value="70000">$70,000</option>
+                    <option value="90000">$90,000</option>
+                    <option value="120000">$120,000</option>
+                    <option value="150000">$150,000</option>
+                    <option value="200000">$200,000+</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white">Skills</h4>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Add skills to highlight your expertise (comma separated)
+              </p>
+              <div className="mt-2">
+                <input
+                  type="text"
+                  id="skills"
+                  name="skills"
+                  className="input-field"
+                  placeholder="e.g. React, Node.js, TypeScript"
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-primary-700 dark:hover:bg-primary-600"
+              >
+                Save Preferences
+              </button>
             </div>
           </div>
         </div>
@@ -385,4 +403,4 @@ function AccountSettings() {
   );
 }
 
-export default withAuth(AccountSettings);
+export default withAuth(ProfileSettings);

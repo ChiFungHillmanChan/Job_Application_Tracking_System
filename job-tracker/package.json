@@ -7,8 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "server": "nodemon backend/server.js",
-    "dev:both": "concurrently \"npm run dev\" \"npm run server\""
+    "server": "cd backend && nodemon server.js",
+    "dev:both": "concurrently \"npm run dev\" \"npm run server\"",
+    "dev:full": "concurrently \"npm run dev\" \"cd backend && nodemon server.js\"",
+    "install:all": "npm install && cd backend && npm install",
+    "check:health": "curl http://localhost:5001/health && echo '\nBackend is running!' || echo 'Backend is not running'"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.3",
