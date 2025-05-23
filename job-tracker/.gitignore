@@ -6,6 +6,11 @@ node_modules
 # testing
 /coverage
 
+#admin
+backend/controller/adminController.js
+backend/routes/admin.js
+backend/scripts
+
 # next.js
 /.next/
 /out/

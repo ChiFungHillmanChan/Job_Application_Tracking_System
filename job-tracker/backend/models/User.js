@@ -1,3 +1,4 @@
+// backend/models/User.js - Enhanced version
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -60,41 +61,87 @@ const UserSchema = new mongoose.Schema({
     enum: ['free', 'premium', 'enterprise'],
     default: 'free',
   },
+  // Enhanced subscription fields for super users
   subscriptionStatus: {
     type: String,
-    enum: ['active', 'cancelled', 'past_due', 'unpaid', 'trialing'],
-    default: 'active',
-  },
-  stripeCustomerId: {
-    type: String,
-    default: null,
-  },
-  stripeSubscriptionId: {
-    type: String,
-    default: null,
+    enum: ['active', 'inactive', 'cancelled', 'past_due'],
+    default: 'active'
   },
   subscriptionStartDate: {
     type: Date,
-    default: null,
+    default: Date.now
   },
   subscriptionEndDate: {
     type: Date,
-    default: null,
+    default: null // null means no end date (lifetime)
   },
-  billingCycle: {
+  isLifetimeSubscription: {
+    type: Boolean,
+    default: false
+  },
+  stripeCustomerId: {
     type: String,
-    enum: ['monthly', 'annual'],
-    default: 'monthly',
+    default: null
   },
-  trialEndsAt: {
-    type: Date,
-    default: null,
+  stripeSubscriptionId: {
+    type: String,
+    default: null
+  },
+  // Usage limits (for super users, set to -1 for unlimited)
+  maxResumes: {
+    type: Number,
+    default: function() {
+      switch(this.subscriptionTier) {
+        case 'free': return 8;
+        case 'premium': return 50;
+        case 'enterprise': return -1; // unlimited
+        default: return 8;
+      }
+    }
+  },
+  maxApplications: {
+    type: Number,
+    default: function() {
+      switch(this.subscriptionTier) {
+        case 'free': return 100;
+        case 'premium': return 1000;
+        case 'enterprise': return -1; // unlimited
+        default: return 100;
+      }
+    }
+  },
+  // Role for admin access
+  role: {
+    type: String,
+    enum: ['user', 'admin', 'superadmin'],
+    default: 'user'
   },
   createdAt: {
     type: Date,
     default: Date.now,
   },
 });
+
+// Method to check if subscription is active
+UserSchema.methods.isSubscriptionActive = function() {
+  if (this.isLifetimeSubscription) return true;
+  if (this.subscriptionStatus !== 'active') return false;
+  if (this.subscriptionEndDate && new Date() > this.subscriptionEndDate) return false;
+  return true;
+};
+
+// Method to check if user has unlimited access
+UserSchema.methods.hasUnlimitedAccess = function() {
+  return this.subscriptionTier === 'enterprise' || this.isLifetimeSubscription;
+};
+
+// Method to get current usage limits
+UserSchema.methods.getUsageLimits = function() {
+  return {
+    resumes: this.maxResumes === -1 ? 'unlimited' : this.maxResumes,
+    applications: this.maxApplications === -1 ? 'unlimited' : this.maxApplications
+  };
+};
 
 // Encrypt password using bcrypt
 UserSchema.pre('save', async function (next) {
@@ -111,17 +158,18 @@ UserSchema.pre('save', async function (next) {
   }
 });
 
-// Update subscription start date when tier changes
-UserSchema.pre('save', function (next) {
-  if (this.isModified('subscriptionTier') && !this.isNew) {
-    // If upgrading from free to paid tier
-    if (this.subscriptionTier !== 'free' && !this.subscriptionStartDate) {
-      this.subscriptionStartDate = new Date();
-    }
-    
-    // If downgrading to free tier
-    if (this.subscriptionTier === 'free') {
-      this.subscriptionEndDate = new Date();
+// Update usage limits when subscription tier changes
+UserSchema.pre('save', function(next) {
+  if (this.isModified('subscriptionTier')) {
+    if (this.subscriptionTier === 'enterprise' || this.isLifetimeSubscription) {
+      this.maxResumes = -1;
+      this.maxApplications = -1;
+    } else if (this.subscriptionTier === 'premium') {
+      this.maxResumes = 50;
+      this.maxApplications = 1000;
+    } else {
+      this.maxResumes = 8;
+      this.maxApplications = 100;
     }
   }
   next();
@@ -130,75 +178,6 @@ UserSchema.pre('save', function (next) {
 // Match user entered password to hashed password in database
 UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
-};
-
-// Check if user has access to a feature based on subscription tier
-UserSchema.methods.hasFeatureAccess = function (feature) {
-  const featureMap = {
-    unlimited_resumes: ['premium', 'enterprise'],
-    unlimited_jobs: ['premium', 'enterprise'],
-    ai_features: ['enterprise'],
-    priority_support: ['premium', 'enterprise'],
-    personal_consultation: ['enterprise'],
-    beta_access: ['enterprise'],
-    advanced_analytics: ['premium', 'enterprise'],
-    api_access: ['enterprise']
-  };
-  
-  return featureMap[feature] ? featureMap[feature].includes(this.subscriptionTier) : false;
-};
-
-// Get subscription plan limits
-UserSchema.methods.getPlanLimits = function () {
-  const limits = {
-    free: {
-      resumes: 8,
-      jobApplicationsPerMonth: 50,
-      storageGB: 1,
-      supportLevel: 'standard'
-    },
-    premium: {
-      resumes: Infinity,
-      jobApplicationsPerMonth: Infinity,
-      storageGB: 10,
-      supportLevel: 'priority'
-    },
-    enterprise: {
-      resumes: Infinity,
-      jobApplicationsPerMonth: Infinity,
-      storageGB: 100,
-      supportLevel: 'dedicated',
-      aiFeatures: true,
-      personalConsultation: true,
-      betaAccess: true
-    }
-  };
-  
-  return limits[this.subscriptionTier] || limits.free;
-};
-
-// Check if subscription is active
-UserSchema.methods.isSubscriptionActive = function () {
-  return this.subscriptionStatus === 'active' || this.subscriptionStatus === 'trialing';
-};
-
-// Check if user is on trial
-UserSchema.methods.isOnTrial = function () {
-  return this.subscriptionStatus === 'trialing' && 
-         this.trialEndsAt && 
-         this.trialEndsAt > new Date();
-};
-
-// Get days remaining in trial
-UserSchema.methods.getTrialDaysRemaining = function () {
-  if (!this.isOnTrial()) return 0;
-  
-  const now = new Date();
-  const trialEnd = new Date(this.trialEndsAt);
-  const diffTime = trialEnd - now;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  return Math.max(0, diffDays);
 };
 
 module.exports = mongoose.model('User', UserSchema);
