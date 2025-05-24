@@ -1,12 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import Link from 'next/link';
 
 export default function ResetPasswordPage({ params }) {
-  const resetToken = params.token;
+
+  const resolvedParams = use(params);
+
+  const resetToken = resolvedParams.token;
   const router = useRouter();
   
   const [formData, setFormData] = useState({

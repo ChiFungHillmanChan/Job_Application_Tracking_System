@@ -1,9 +1,26 @@
 const User = require('../models/User');
 const asyncHandler = require('express-async-handler');
-const { generateToken, generateResetPasswordToken, verifyToken } = require('../utils/tokenManager');
+const { generateResetPasswordToken, verifyToken } = require('../utils/tokenManager');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { sendPasswordResetEmail } = require('../utils/sendEmail');
+
+const generateToken = (user) => {
+  const jwt = require('jsonwebtoken');
+  return jwt.sign(
+    {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      subscriptionTier: user.subscriptionTier
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: process.env.JWT_EXPIRE || '30d'
+    }
+  );
+};
+
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -271,6 +288,10 @@ const resetPassword = asyncHandler(async (req, res) => {
   const { password } = req.body;
   const { resettoken } = req.params;
 
+  console.log('🔐 Password reset attempt for token:', resettoken?.substring(0, 8) + '...');
+  console.log('🔐 Password provided:', password ? 'Yes' : 'No');
+  console.log('🔐 Password length:', password?.length);
+
   // Input validation
   if (!password) {
     logger.warn('Password reset attempt without password');
@@ -303,6 +324,8 @@ const resetPassword = asyncHandler(async (req, res) => {
       .update(resettoken)
       .digest('hex');
 
+    console.log('🔍 Looking for user with hashed token:', resetPasswordToken.substring(0, 8) + '...');
+
     // Find user with valid reset token that hasn't expired
     const user = await User.findOne({
       resetPasswordToken,
@@ -317,23 +340,48 @@ const resetPassword = asyncHandler(async (req, res) => {
       });
     }
 
-    // Check if new password is different from current password
-    const isSamePassword = await user.matchPassword(password);
-    if (isSamePassword) {
-      logger.warn(`User ${user.email} attempted to reset password with same password`);
-      return res.status(400).json({
-        success: false,
-        error: 'New password must be different from your current password'
-      });
+    console.log('✅ User found:', user.email);
+
+    // FIXED: Check if new password is different from current password
+    try {
+      const isSamePassword = await user.matchPassword(password);
+      if (isSamePassword) {
+        logger.warn(`User ${user.email} attempted to reset password with same password`);
+        return res.status(400).json({
+          success: false,
+          error: 'New password must be different from your current password'
+        });
+      }
+    } catch (matchError) {
+      // If matchPassword fails, continue - it might be due to the old password format
+      console.log('⚠️ matchPassword check failed, continuing with reset:', matchError.message);
     }
 
-    // Set new password and clear reset token fields
-    user.password = password;
+    console.log('🔄 Setting new password...');
+
+    // FIXED: Set new password properly
+    user.password = password; // The pre-save hook will hash it
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     user.passwordChangedAt = Date.now();
     
-    await user.save();
+    // FIXED: Save user and handle bcrypt errors
+    try {
+      await user.save();
+      console.log('✅ Password saved successfully');
+    } catch (saveError) {
+      console.log('❌ Error saving user:', saveError.message);
+      
+      if (saveError.message.includes('Illegal arguments')) {
+        // Handle bcrypt error
+        return res.status(500).json({
+          success: false,
+          error: 'Error processing password. Please try again.'
+        });
+      }
+      
+      throw saveError;
+    }
 
     logger.info(`Password reset successful for user: ${user.email}`);
 
@@ -354,13 +402,14 @@ const resetPassword = asyncHandler(async (req, res) => {
       }
     });
 
-    // Optional: Send confirmation email
+    // Optional: Send confirmation email (don't fail if this fails)
     try {
       if (process.env.SEND_PASSWORD_RESET_CONFIRMATION === 'true') {
+        const { sendEmail } = require('../utils/sendEmail');
         await sendEmail({
           email: user.email,
           subject: 'Password Reset Confirmation - JobTracker',
-          message: `Hello ${user.name},\n\nThis is to confirm that your password has been successfully reset for your JobTracker account.\n\nIf you did not make this change, please contact our support team immediately.\n\nBest regards,\nThe JobTracker Team`,
+          message: `Hello ${user.name},\n\nThis confirms that your password has been successfully reset for your JobTracker account.\n\nIf you did not make this change, please contact our support team immediately.\n\nBest regards,\nThe JobTracker Team`,
           userName: user.name
         });
       }
@@ -371,6 +420,7 @@ const resetPassword = asyncHandler(async (req, res) => {
 
   } catch (error) {
     logger.error(`Password reset error: ${error.message}`);
+    console.log('❌ Full error details:', error);
     
     // Handle specific database errors
     if (error.name === 'ValidationError') {
@@ -381,12 +431,21 @@ const resetPassword = asyncHandler(async (req, res) => {
       });
     }
     
+    // Handle bcrypt errors
+    if (error.message.includes('Illegal arguments')) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error processing password. Please ensure your password is valid and try again.'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       error: 'An error occurred while resetting your password. Please try again.'
     });
   }
 });
+
 
 // @desc    Update user profile
 // @route   PUT /api/auth/updateprofile

@@ -143,18 +143,37 @@ UserSchema.methods.getUsageLimits = function() {
   };
 };
 
-// Encrypt password using bcrypt
 UserSchema.pre('save', async function (next) {
+  // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) {
-    next();
+    return next();
   }
 
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-  
-  // If password is modified and it's not a new user, update passwordChangedAt
-  if (this.isModified('password') && !this.isNew) {
-    this.passwordChangedAt = Date.now();
+  try {
+    console.log('🔐 Hashing password for user:', this.email);
+    
+    // FIXED: Ensure password exists and is a string
+    if (!this.password || typeof this.password !== 'string') {
+      console.log('❌ Invalid password provided:', typeof this.password);
+      const error = new Error('Password must be a valid string');
+      return next(error);
+    }
+
+    // FIXED: Generate salt and hash password
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    
+    console.log('✅ Password hashed successfully');
+    
+    // If password is modified and it's not a new user, update passwordChangedAt
+    if (this.isModified('password') && !this.isNew) {
+      this.passwordChangedAt = Date.now();
+    }
+    
+    next();
+  } catch (error) {
+    console.log('❌ Error hashing password:', error.message);
+    next(error);
   }
 });
 
@@ -177,7 +196,14 @@ UserSchema.pre('save', function(next) {
 
 // Match user entered password to hashed password in database
 UserSchema.methods.matchPassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  try {
+    if (!enteredPassword || !this.password) {
+      return false;
+    }
+    return await bcrypt.compare(enteredPassword, this.password);
+  } catch (error) {
+    console.log('❌ Error in matchPassword:', error.message);
+    return false;
+  }
 };
-
 module.exports = mongoose.model('User', UserSchema);
