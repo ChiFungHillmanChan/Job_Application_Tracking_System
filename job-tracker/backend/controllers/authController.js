@@ -3,6 +3,7 @@ const asyncHandler = require('express-async-handler');
 const { generateToken, generateResetPasswordToken, verifyToken } = require('../utils/tokenManager');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { sendPasswordResetEmail } = require('../utils/sendEmail');
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -163,79 +164,228 @@ const logoutUser = asyncHandler(async (req, res) => {
 // @route   POST /api/auth/forgotpassword
 // @access  Public
 const forgotPassword = asyncHandler(async (req, res) => {
-  const user = await User.findOne({ email: req.body.email });
+  const { email } = req.body;
 
-  if (!user) {
-    logger.warn(`Password reset attempt for non-existent email: ${req.body.email}`);
-    return res.status(404).json({
+  // Input validation
+  if (!email) {
+    logger.warn('Forgot password attempt without email');
+    return res.status(400).json({
       success: false,
-      error: 'User not found'
+      error: 'Please provide an email address'
     });
   }
 
-  // Get reset token
-  const { resetToken, resetPasswordToken, resetPasswordExpire } = generateResetPasswordToken();
+  // Email format validation
+  const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+  if (!emailRegex.test(email)) {
+    logger.warn(`Forgot password attempt with invalid email format: ${email}`);
+    return res.status(400).json({
+      success: false,
+      error: 'Please provide a valid email address'
+    });
+  }
 
-  // Save the hashed token to the database
-  await User.findByIdAndUpdate(user._id, {
-    resetPasswordToken,
-    resetPasswordExpire
-  });
+  try {
+    const user = await User.findOne({ email });
 
-  // Create reset URL
-  const resetUrl = `${req.protocol}://${req.get('host')}/auth/resetpassword/${resetToken}`;
+    if (!user) {
+      logger.warn(`Password reset attempt for non-existent email: ${email}`);
+      // For security reasons, don't reveal whether the email exists or not
+      return res.status(200).json({
+        success: true,
+        data: 'If an account with that email exists, we have sent a password reset link.'
+      });
+    }
 
-  // In a real application, you would send an email here with the resetUrl
-  logger.info(`Password reset token generated for user: ${user.email}`);
+    // Check if user recently requested a password reset (rate limiting)
+    if (user.resetPasswordExpire && user.resetPasswordExpire > Date.now()) {
+      const timeLeft = Math.ceil((user.resetPasswordExpire - Date.now()) / 1000 / 60); // minutes
+      logger.warn(`Password reset rate limit hit for email: ${email}, ${timeLeft} minutes remaining`);
+      return res.status(429).json({
+        success: false,
+        error: `Please wait ${timeLeft} minutes before requesting another password reset`
+      });
+    }
 
-  res.status(200).json({
-    success: true,
-    data: 'Email sent',
-    // For development only - remove in production
-    resetUrl: resetUrl
-  });
+    // Get reset token
+    const { resetToken, resetPasswordToken, resetPasswordExpire } = generateResetPasswordToken();
+
+    // Save the hashed token to the database
+    await User.findByIdAndUpdate(user._id, {
+      resetPasswordToken,
+      resetPasswordExpire
+    });
+
+    // Create reset URL - use frontend URL for better UX
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetUrl = `${frontendUrl}/auth/resetpassword/${resetToken}`;
+
+    try {
+      // Send password reset email with enhanced template
+      const emailResult = await sendPasswordResetEmail(
+        user.email,
+        resetUrl,
+        user.name
+      );
+
+      logger.info(`Password reset email sent successfully to: ${user.email}`);
+      
+      // Success response (don't reveal if email was sent or not for security)
+      res.status(200).json({
+        success: true,
+        data: 'If an account with that email exists, we have sent a password reset link.',
+        // Include preview URL in development for testing
+        ...(process.env.NODE_ENV === 'development' && emailResult.previewUrl && {
+          previewUrl: emailResult.previewUrl
+        })
+      });
+
+    } catch (emailError) {
+      logger.error(`Failed to send password reset email to ${user.email}: ${emailError.message}`);
+      
+      // Clear the reset token if email failed to send
+      await User.findByIdAndUpdate(user._id, {
+        resetPasswordToken: undefined,
+        resetPasswordExpire: undefined
+      });
+
+      return res.status(500).json({
+        success: false,
+        error: 'Email service is currently unavailable. Please try again later.'
+      });
+    }
+
+  } catch (error) {
+    logger.error(`Forgot password error: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: 'An error occurred while processing your request. Please try again later.'
+    });
+  }
 });
 
 // @desc    Reset password
 // @route   PUT /api/auth/resetpassword/:resettoken
 // @access  Public
 const resetPassword = asyncHandler(async (req, res) => {
-  // Get hashed token
-  const resetPasswordToken = crypto
-    .createHash('sha256')
-    .update(req.params.resettoken)
-    .digest('hex');
+  const { password } = req.body;
+  const { resettoken } = req.params;
 
-  const user = await User.findOne({
-    resetPasswordToken,
-    resetPasswordExpire: { $gt: Date.now() }
-  });
-
-  if (!user) {
-    logger.warn('Invalid or expired password reset token used');
+  // Input validation
+  if (!password) {
+    logger.warn('Password reset attempt without password');
     return res.status(400).json({
       success: false,
-      error: 'Invalid or expired token'
+      error: 'Please provide a new password'
     });
   }
 
-  // Set new password
-  user.password = req.body.password;
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpire = undefined;
-  await user.save();
+  if (password.length < 6) {
+    logger.warn('Password reset attempt with short password');
+    return res.status(400).json({
+      success: false,
+      error: 'Password must be at least 6 characters long'
+    });
+  }
 
-  logger.info(`Password reset successful for user: ${user.email}`);
+  if (!resettoken) {
+    logger.warn('Password reset attempt without reset token');
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid reset token'
+    });
+  }
 
-  res.status(200).json({
-    success: true,
-    token: generateToken(user),
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email
+  try {
+    // Get hashed token
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(resettoken)
+      .digest('hex');
+
+    // Find user with valid reset token that hasn't expired
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      logger.warn(`Invalid or expired password reset token used: ${resettoken.substring(0, 8)}...`);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired reset token. Please request a new password reset.'
+      });
     }
-  });
+
+    // Check if new password is different from current password
+    const isSamePassword = await user.matchPassword(password);
+    if (isSamePassword) {
+      logger.warn(`User ${user.email} attempted to reset password with same password`);
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be different from your current password'
+      });
+    }
+
+    // Set new password and clear reset token fields
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    user.passwordChangedAt = Date.now();
+    
+    await user.save();
+
+    logger.info(`Password reset successful for user: ${user.email}`);
+
+    // Generate new auth token for immediate login
+    const token = generateToken(user);
+
+    // Send success response with user data and token
+    res.status(200).json({
+      success: true,
+      message: 'Password has been reset successfully',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        subscriptionTier: user.subscriptionTier,
+        createdAt: user.createdAt
+      }
+    });
+
+    // Optional: Send confirmation email
+    try {
+      if (process.env.SEND_PASSWORD_RESET_CONFIRMATION === 'true') {
+        await sendEmail({
+          email: user.email,
+          subject: 'Password Reset Confirmation - JobTracker',
+          message: `Hello ${user.name},\n\nThis is to confirm that your password has been successfully reset for your JobTracker account.\n\nIf you did not make this change, please contact our support team immediately.\n\nBest regards,\nThe JobTracker Team`,
+          userName: user.name
+        });
+      }
+    } catch (emailError) {
+      // Don't fail the password reset if confirmation email fails
+      logger.warn(`Failed to send password reset confirmation email to ${user.email}: ${emailError.message}`);
+    }
+
+  } catch (error) {
+    logger.error(`Password reset error: ${error.message}`);
+    
+    // Handle specific database errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        error: messages.join(', ')
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: 'An error occurred while resetting your password. Please try again.'
+    });
+  }
 });
 
 // @desc    Update user profile
