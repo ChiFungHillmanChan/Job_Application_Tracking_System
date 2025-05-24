@@ -2,7 +2,6 @@
 
 import axios from 'axios';
 
-// Get the base URL from environment variables or use a fallback for development
 const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
@@ -11,13 +10,10 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,
-  // Add timeout to prevent long-running requests
   timeout: 15000,
 });
 
-// Only run in browser environment
 if (typeof window !== 'undefined') {
-  // Add a request interceptor
   api.interceptors.request.use(
     (config) => {
       try {
@@ -35,11 +31,9 @@ if (typeof window !== 'undefined') {
     }
   );
 
-  // Add a response interceptor
   api.interceptors.response.use(
     (response) => response,
     (error) => {
-      // Check if error is CORS-related
       const isCorsError = (
         error.message && error.message.includes('Network Error') && 
         !error.response
@@ -48,16 +42,12 @@ if (typeof window !== 'undefined') {
       if (isCorsError) {
         console.warn('CORS error detected. Falling back to mock data if available.');
         
-        // If error occurs during authentication check, handle gracefully
         if (error.config && error.config.url.includes('/auth/me')) {
           console.warn('Authentication check failed due to CORS/network issue');
           
-          // Check if token exists before falling back to mock data
           try {
             const token = localStorage.getItem('token');
             if (token) {
-              // Keep the token on CORS errors as this is likely a development issue
-              // rather than an authentication issue
               return Promise.reject({
                 response: {
                   status: 0,
@@ -65,7 +55,7 @@ if (typeof window !== 'undefined') {
                     error: 'Network error. Please check server connection and CORS configuration.'
                   }
                 },
-                isCorsError: true // Add flag to identify CORS errors
+                isCorsError: true 
               });
             }
           } catch (e) {
@@ -74,13 +64,10 @@ if (typeof window !== 'undefined') {
         }
       }
       
-      // Handle 401 Unauthorized errors
       if (error.response && error.response.status === 401) {
-        // Check if this is a login attempt
         const isLoginAttempt = error.config.url.includes('/auth/login');
         
         if (!isLoginAttempt) {
-          // Only remove token for non-login 401 errors
           try {
             localStorage.removeItem('token');
           } catch (e) {
@@ -88,8 +75,6 @@ if (typeof window !== 'undefined') {
           }
           
           if (typeof window !== 'undefined') {
-            // Use a more gentle approach than immediate redirect
-            // This prevents redirect loops
             if (!window.location.pathname.includes('/auth/login')) {
               window.location.href = '/auth/login';
             }
@@ -102,15 +87,12 @@ if (typeof window !== 'undefined') {
   );
 }
 
-// For development mode, create a mock API adapter that still respects authentication
 if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   console.info('Running in development mode - API calls may be simulated if server is unavailable');
   
-  // Create a persistent mock user store using localStorage
   const MOCK_USERS_KEY = 'job_tracker_mock_users';
   const MOCK_RESUMES_KEY = 'job_tracker_mock_resumes';
   const MOCK_JOBS_KEY = 'job_tracker_mock_jobs';
-  // Initialize with a default test user
   let mockUsers = [
     {
       id: 'dev-user-1',
@@ -123,25 +105,21 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   ];
 
 
-  // Try to load any previously stored mock users
   try {
     const storedUsers = localStorage.getItem(MOCK_USERS_KEY);
     if (storedUsers) {
       mockUsers = JSON.parse(storedUsers);
       console.info('Loaded stored mock users:', mockUsers.length);
     } else {
-      // Initialize the storage
       localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(mockUsers));
     }
     
-    // Initialize mock resumes if they don't exist
     if (!localStorage.getItem(MOCK_RESUMES_KEY)) {
       localStorage.setItem(MOCK_RESUMES_KEY, JSON.stringify([]));
     } else {
-      // Verify it's valid JSON
       try {
         const storedResumes = localStorage.getItem(MOCK_RESUMES_KEY);
-        JSON.parse(storedResumes); // Just to test if it's valid JSON
+        JSON.parse(storedResumes); 
         console.info('Successfully validated stored resumes');
       } catch (error) {
         console.warn('Invalid resumes data in localStorage, resetting to empty array');
@@ -150,7 +128,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   } catch (error) {
     console.error('Error accessing localStorage for mock data:', error);
-    // Initialize with empty data if there was an error
     try {
       localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(mockUsers));
       localStorage.setItem(MOCK_RESUMES_KEY, JSON.stringify([]));
@@ -167,13 +144,11 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     console.error('Error initializing mock jobs storage:', error);
   }
 
-  // Backup original methods to allow fallthrough
   const originalGet = api.get;
   const originalPost = api.post;
   const originalPut = api.put;
   const originalDelete = axios.delete.bind(axios);
   
-  // Helper to save users to localStorage
   const saveMockUsers = () => {
     try {
       localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(mockUsers));
@@ -182,7 +157,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   };
   
-   // Helper to get mock jobs
   const getMockJobs = () => {
     try {
       const storedJobs = localStorage.getItem(MOCK_JOBS_KEY);
@@ -296,7 +270,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   };
 
-
   const getCurrentUserId = () => {
     try {
       const token = localStorage.getItem('token');
@@ -319,6 +292,7 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       try {
         // Decode JWT token to get user ID
         const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log('Decoded JWT payload:', payload); // For debugging
         return payload.id;
       } catch (jwtError) {
         console.error('Error decoding JWT token:', jwtError);
@@ -330,6 +304,144 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       return null;
     }
   };
+
+api.put = async function(url, data, config) {
+  try {
+    const response = await originalPut.call(this, url, data, config);
+    return response;
+  } catch (error) {
+    console.log('=== BACKEND ERROR DEBUG ===');
+    console.log('URL:', url);
+    console.log('Error status:', error.response?.status);
+    console.log('Error data:', error.response?.data);
+    console.log('Error message:', error.message);
+    console.log('Full error response:', error.response);
+    console.log('==========================');
+    
+    if (error.response && error.response.status === 400) {
+      console.error('Backend returned 400 Bad Request:', error.response.data);
+      throw error;
+    }
+    
+    if (error.response && error.response.status === 500) {
+      console.error('Backend returned 500 Internal Server Error:', error.response.data);
+      throw error;
+    }
+    
+    console.warn(`API PUT to ${url} failed, using mock data`);
+    
+    const isNetworkError = error.code === 'ECONNABORTED' || 
+                          error.message?.includes('Network Error') ||
+                          error.message?.includes('timeout') ||
+                          error.name === 'AbortError';
+    
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      throw error;
+    }
+    
+    const token = localStorage.getItem('token');
+    const isRealToken = token && !token.startsWith('mock-token-');
+    
+    if (error.response && error.response.status === 500 && isRealToken) {
+      console.error('Server error with real token - not falling back to mock data');
+      throw error;
+    }
+    
+    if (!isNetworkError && isRealToken) {
+      console.error('API error with real backend - not using mock fallback');
+      throw error;
+    }
+    
+    console.warn('Falling back to mock data due to network error or mock token usage');
+    
+    if (url.includes('/resumes/') && url.includes('/default')) {
+      console.info('Using mock data for setting default resume');
+
+      const userId = getCurrentUserId();
+      if (!userId) {
+        throw { 
+          response: { 
+            status: 401, 
+            data: { 
+              success: false, 
+              error: 'Not authorized' 
+            } 
+          } 
+        };
+      }
+      
+      // Check if we're mixing real and mock data
+      if (isRealToken) {
+        console.error('Cannot mix real backend data with mock localStorage data');
+        throw {
+          response: {
+            status: 500,
+            data: {
+              success: false,
+              error: 'Backend service unavailable. Please check your connection and try again.'
+            }
+          }
+        };
+      }
+      
+      // Extract resume ID from URL
+      const resumeId = url.split('/')[2];
+      console.log('Setting default for resume ID:', resumeId, 'for user:', userId);
+
+      // Find the resume
+      const mockResumes = getMockResumes();        
+      const resumeIndex = mockResumes.findIndex(r => r._id === resumeId && r.user === userId);
+      
+      if (resumeIndex === -1) {
+        console.error('Resume not found:', resumeId, 'for user:', userId);
+        console.log('Available resumes:', mockResumes.filter(r => r.user === userId));
+        throw {
+          response: {
+            status: 404,
+            data: {
+              success: false,
+              error: 'Resume not found'
+            }
+          }
+        };
+      }
+      
+      // Check if already default
+      if (mockResumes[resumeIndex].isDefault) {
+        return {
+          data: {
+            success: true,
+            data: mockResumes[resumeIndex]
+          }
+        };
+      }
+      
+      // Set all resumes of this user as non-default first
+      for (let i = 0; i < mockResumes.length; i++) {
+        if (mockResumes[i].user === userId) {
+          mockResumes[i].isDefault = false;
+        }
+      }
+      
+      // Set the selected resume as default
+      mockResumes[resumeIndex].isDefault = true;
+      mockResumes[resumeIndex].updatedAt = new Date().toISOString();
+      saveMockResumes(mockResumes);
+      
+      console.log('Successfully set resume as default:', resumeId);
+      
+      return {
+        data: {
+          success: true,
+          data: mockResumes[resumeIndex]
+        }
+      };
+    }
+    
+    // For other errors that we haven't handled, re-throw
+    throw error;
+  }
+};
 
   const matchPassword = async (enteredPassword, storedPassword) => {
     return enteredPassword === storedPassword;
@@ -1543,7 +1655,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           };
         }
 
-        // Extract job ID from URL
         const jobId = url.split('/')[2];
         
         const mockJobs = getMockJobs();

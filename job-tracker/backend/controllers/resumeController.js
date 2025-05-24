@@ -1,13 +1,10 @@
-// backend/controllers/resumeController.js
 const asyncHandler = require('express-async-handler');
 const path = require('path');
 const fs = require('fs');
 const Resume = require('../models/Resume');
 const logger = require('../utils/logger');
 
-// @desc    Get all resumes for a user
-// @route   GET /api/resumes
-// @access  Private
+
 const getResumes = asyncHandler(async (req, res) => {
   const resumes = await Resume.find({ user: req.user._id }).sort({ createdAt: -1 });
   
@@ -18,9 +15,7 @@ const getResumes = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Upload a new resume
-// @route   POST /api/resumes
-// @access  Private
+
 const uploadResume = asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({
@@ -29,12 +24,11 @@ const uploadResume = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get file info
+
   const { filename, path: filePath, size, mimetype, originalname } = req.file;
   
-  // Check if name is provided
+
   if (!req.body.name) {
-    // Delete the uploaded file if no name provided
     fs.unlinkSync(filePath);
     return res.status(400).json({
       success: false,
@@ -42,14 +36,11 @@ const uploadResume = asyncHandler(async (req, res) => {
     });
   }
 
-  // Calculate file size in KB
   const fileSize = `${Math.round(size / 1024)} KB`;
   
-  // Check if this is the first resume (to set as default)
   const resumeCount = await Resume.countDocuments({ user: req.user._id });
   const isDefault = resumeCount === 0;
   
-  // Create resume record with original filename and mime type
   const resume = await Resume.create({
     user: req.user._id,
     name: req.body.name,
@@ -67,9 +58,6 @@ const uploadResume = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Get a single resume
-// @route   GET /api/resumes/:id
-// @access  Private
 const getResume = asyncHandler(async (req, res) => {
   const resume = await Resume.findById(req.params.id);
   
@@ -80,7 +68,6 @@ const getResume = asyncHandler(async (req, res) => {
     });
   }
   
-  // Check if resume belongs to user
   if (resume.user.toString() !== req.user._id.toString()) {
     return res.status(403).json({
       success: false,
@@ -94,128 +81,76 @@ const getResume = asyncHandler(async (req, res) => {
   });
 });
 
-// backend/controllers/resumeController.js - Enhanced setDefaultResume with debugging
-
 const setDefaultResume = asyncHandler(async (req, res) => {
   console.log('=== Setting Default Resume ===');
   console.log('Resume ID:', req.params.id);
   console.log('User ID:', req.user._id);
-  console.log('User object:', JSON.stringify(req.user, null, 2));
   
   try {
-    // Validate ObjectId format
-    if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-      console.log('Invalid ObjectId format:', req.params.id);
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid resume ID format'
-      });
-    }
-    
-    // Find the resume to set as default
-    console.log('Finding resume...');
     const resume = await Resume.findById(req.params.id);
     
     if (!resume) {
-      console.log('Resume not found with ID:', req.params.id);
-      
-      // List all resumes for this user for debugging
-      const userResumes = await Resume.find({ user: req.user._id });
-      console.log('User has', userResumes.length, 'resumes:');
-      userResumes.forEach(r => console.log(`- ${r._id}: ${r.name}`));
-      
       return res.status(404).json({
         success: false,
         error: 'Resume not found'
       });
     }
     
-    console.log('Found resume:', {
-      id: resume._id,
-      name: resume.name,
-      user: resume.user,
-      isDefault: resume.isDefault
-    });
-    
-    // Check if resume belongs to user
     if (resume.user.toString() !== req.user._id.toString()) {
-      console.log('Resume ownership mismatch:');
-      console.log('- Resume user:', resume.user.toString());
-      console.log('- Request user:', req.user._id.toString());
-      
       return res.status(403).json({
         success: false,
         error: 'Not authorized to modify this resume'
       });
     }
     
-    // If already default, no need to update
     if (resume.isDefault) {
-      console.log('Resume is already default');
       return res.status(200).json({
         success: true,
         data: resume
       });
     }
     
-    console.log('Starting transaction to update default resume...');
-    
-    // Use a transaction to ensure data consistency
-    const session = await Resume.startSession();
-    session.startTransaction();
-    
-    try {
-      // First, unset any current default resume for this user
-      const updateResult = await Resume.updateMany(
-        { user: req.user._id, isDefault: true },
-        { $set: { isDefault: false, updatedAt: new Date() } },
-        { session }
-      );
-      
-      console.log('Updated existing default resumes:', updateResult);
-      
-      // Then set the new default resume
-      resume.isDefault = true;
-      resume.updatedAt = new Date();
-      await resume.save({ session });
-      
-      // Commit the transaction
-      await session.commitTransaction();
-      console.log('Transaction committed successfully');
-      
-      console.log('Successfully set resume as default:', resume._id);
-      
-      res.status(200).json({
-        success: true,
-        data: resume
-      });
-      
-    } catch (transactionError) {
-      // Rollback the transaction on error
-      await session.abortTransaction();
-      console.error('Transaction error:', transactionError);
-      throw transactionError;
-    } finally {
-      session.endSession();
+    if (!resume.originalFilename) {
+      resume.originalFilename = resume.file || `${resume.name}.pdf`;
+      console.log('Fixed missing originalFilename:', resume.originalFilename);
     }
     
-  } catch (error) {
-    console.error('=== Error setting default resume ===');
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
+    if (!resume.mimeType) {
+      let mimeType = 'application/pdf';
+      if (resume.file) {
+        const ext = resume.file.split('.').pop()?.toLowerCase();
+        switch (ext) {
+          case 'pdf': mimeType = 'application/pdf'; break;
+          case 'doc': mimeType = 'application/msword'; break;
+          case 'docx': mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; break;
+        }
+      }
+      resume.mimeType = mimeType;
+      console.log('Fixed missing mimeType:', resume.mimeType);
+    }
+    
+    await Resume.updateMany(
+      { user: req.user._id, isDefault: true },
+      { $set: { isDefault: false, updatedAt: new Date() } }
+    );
+    
+    resume.isDefault = true;
+    resume.updatedAt = new Date();
+    
+    const savedResume = await resume.save();
+    
+    console.log('Successfully set resume as default');
+    
+    res.status(200).json({
+      success: true,
+      data: savedResume
     });
     
-    // Check for specific MongoDB errors
-    if (error.name === 'CastError') {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid resume ID format'
-      });
-    }
+  } catch (error) {
+    console.error('Error setting default resume:', error);
     
     if (error.name === 'ValidationError') {
+      console.error('Validation details:', error.errors);
       return res.status(400).json({
         success: false,
         error: 'Validation error: ' + error.message
@@ -230,9 +165,6 @@ const setDefaultResume = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Preview a resume
-// @route   GET /api/resumes/:id/preview
-// @access  Private
 const previewResume = asyncHandler(async (req, res) => {
   const resume = await Resume.findById(req.params.id);
   
@@ -243,7 +175,6 @@ const previewResume = asyncHandler(async (req, res) => {
     });
   }
   
-  // Check if resume belongs to user
   if (resume.user.toString() !== req.user._id.toString()) {
     return res.status(403).json({
       success: false,
@@ -251,10 +182,8 @@ const previewResume = asyncHandler(async (req, res) => {
     });
   }
   
-  // Build file path
   const filePath = path.join(__dirname, '../uploads/resumes', resume.file);
   
-  // Check if file exists
   if (!fs.existsSync(filePath)) {
     logger.error(`File not found: ${filePath}`);
     return res.status(404).json({
@@ -264,10 +193,8 @@ const previewResume = asyncHandler(async (req, res) => {
   }
   
   try {
-    // Get file stats
     const stats = fs.statSync(filePath);
     
-    // Determine content type based on file extension
     const ext = path.extname(resume.file).toLowerCase();
     let contentType = resume.mimeType || 'application/octet-stream';
     
@@ -281,24 +208,18 @@ const previewResume = asyncHandler(async (req, res) => {
       }
     }
     
-    // Set headers for inline display with iframe support
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', stats.size);
     res.setHeader('Content-Disposition', `inline; filename="${resume.originalFilename || resume.name + ext}"`);
     res.setHeader('Cache-Control', 'public, max-age=3600');
     
-    // IMPORTANT: Remove X-Frame-Options or set to allow same origin
     res.removeHeader('X-Frame-Options');
-    // Or alternatively, explicitly allow same origin:
-    // res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    
-    // For PDF files, add additional headers for better browser support
+
     if (ext === '.pdf') {
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Accept-Ranges', 'bytes');
     }
     
-    // Create read stream and pipe to response
     const fileStream = fs.createReadStream(filePath);
     
     fileStream.on('error', (error) => {
@@ -322,9 +243,6 @@ const previewResume = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Download a resume  
-// @route   GET /api/resumes/:id/download
-// @access  Private
 const downloadResume = asyncHandler(async (req, res) => {
   const resume = await Resume.findById(req.params.id);
   
@@ -335,7 +253,6 @@ const downloadResume = asyncHandler(async (req, res) => {
     });
   }
   
-  // Check if resume belongs to user
   if (resume.user.toString() !== req.user._id.toString()) {
     return res.status(403).json({
       success: false,
@@ -343,10 +260,8 @@ const downloadResume = asyncHandler(async (req, res) => {
     });
   }
   
-  // Build file path
   const filePath = path.join(__dirname, '../uploads/resumes', resume.file);
   
-  // Check if file exists
   if (!fs.existsSync(filePath)) {
     logger.error(`File not found: ${filePath}`);
     return res.status(404).json({
@@ -356,10 +271,8 @@ const downloadResume = asyncHandler(async (req, res) => {
   }
   
   try {
-    // Get file stats
     const stats = fs.statSync(filePath);
     
-    // Determine content type based on file extension
     const ext = path.extname(resume.file).toLowerCase();
     let contentType = resume.mimeType || 'application/octet-stream';
     
@@ -373,13 +286,11 @@ const downloadResume = asyncHandler(async (req, res) => {
       }
     }
     
-    // Set headers for download
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', stats.size);
     res.setHeader('Content-Disposition', `attachment; filename="${resume.originalFilename || resume.name + ext}"`);
     res.setHeader('Cache-Control', 'no-cache');
     
-    // Create read stream and pipe to response
     const fileStream = fs.createReadStream(filePath);
     
     fileStream.on('error', (error) => {
@@ -403,9 +314,6 @@ const downloadResume = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Delete a resume
-// @route   DELETE /api/resumes/:id
-// @access  Private
 const deleteResume = asyncHandler(async (req, res) => {
   const resume = await Resume.findById(req.params.id);
   
@@ -416,7 +324,7 @@ const deleteResume = asyncHandler(async (req, res) => {
     });
   }
   
-  // Check if resume belongs to user
+
   if (resume.user.toString() !== req.user._id.toString()) {
     return res.status(403).json({
       success: false,
@@ -424,7 +332,6 @@ const deleteResume = asyncHandler(async (req, res) => {
     });
   }
   
-  // Cannot delete default resume
   if (resume.isDefault) {
     return res.status(400).json({
       success: false,
@@ -432,17 +339,14 @@ const deleteResume = asyncHandler(async (req, res) => {
     });
   }
   
-  // Get file path
   const filePath = path.join(__dirname, '../uploads/resumes', resume.file);
   
-  // Delete file if it exists
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   } else {
     logger.warn(`File not found during resume deletion: ${filePath}`);
   }
   
-  // Remove database entry
   await resume.deleteOne();
   
   res.status(200).json({
