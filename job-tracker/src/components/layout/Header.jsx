@@ -50,6 +50,33 @@ export default function Header() {
     if (mobileMenuOpen) setMobileMenuOpen(false);
   };
 
+  // Updated isActive function to handle each route correctly
+  const isActive = (path) => {
+
+    // Exact match for Home - only active on /dashboard
+    if (path === '/dashboard') {
+      return pathname === '/dashboard';
+    }
+    
+    // For Job Applications - active on /dashboard/jobs and its subroutes
+    if (path === '/dashboard/jobs') {
+      return pathname === '/dashboard/jobs' || pathname.startsWith('/dashboard/jobs/');
+    }
+    
+    // For Settings - active on /settings and its subroutes
+    if (path === '/settings') {
+      return pathname === '/settings' || pathname.startsWith('/settings/');
+    }
+    
+    // For About - only active on /about
+    if (path === '/about') {
+      return pathname === '/about';
+    }
+    
+    // Default exact match for other routes
+    return pathname === path;
+  };
+
   // Only check authentication status after client hydration
   const isUserAuthenticated = isClient && !loading && isAuthenticated();
 
@@ -59,38 +86,28 @@ export default function Header() {
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <Link href="/" className="text-xl font-bold text-primary-600 dark:text-primary-400">
+              <Link href="/dashboard" className="text-xl font-bold text-primary-600 dark:text-primary-400">
                 JobTracker
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link
-                href="/"
-                className={`${
-                  pathname === '/'
-                    ? 'border-primary-500 text-gray-900 dark:text-white'
-                    : 'border-transparent text-gray-500 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-200'
-                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-              >
-                Home
-              </Link>
               {/* Only render authenticated navigation items on client side */}
               {isClient && isUserAuthenticated && (
                 <>
                   <Link
                     href="/dashboard"
                     className={`${
-                      pathname === '/dashboard' || pathname.startsWith('/dashboard/')
+                      isActive('/dashboard')
                         ? 'border-primary-500 text-gray-900 dark:text-white'
                         : 'border-transparent text-gray-500 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-200'
                     } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                   >
-                    Dashboard
+                    Home
                   </Link>
                   <Link
                     href="/dashboard/jobs"
                     className={`${
-                      pathname === '/dashboard/jobs' || pathname.startsWith('/dashboard/jobs/')
+                      isActive('/dashboard/jobs')
                         ? 'border-primary-500 text-gray-900 dark:text-white'
                         : 'border-transparent text-gray-500 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-200'
                     } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
@@ -102,7 +119,7 @@ export default function Header() {
               <Link
                 href="/about"
                 className={`${
-                  pathname === '/about'
+                  isActive('/about')
                     ? 'border-primary-500 text-gray-900 dark:text-white'
                     : 'border-transparent text-gray-500 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-200'
                 } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
@@ -150,10 +167,10 @@ export default function Header() {
                       className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                       role="menuitem"
                     >
-                      Dashboard
+                      Home
                     </Link>
                     <Link
-                      href="/settings/profile"
+                      href="/settings"
                       className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                       role="menuitem"
                     >
@@ -237,33 +254,23 @@ export default function Header() {
       {mobileMenuOpen && (
         <div className="sm:hidden" id="mobile-menu" onClick={(e) => e.stopPropagation()}>
           <div className="pt-2 pb-3 space-y-1">
-            <Link
-              href="/"
-              className={`${
-                pathname === '/'
-                  ? 'bg-primary-50 dark:bg-primary-900 border-primary-500 text-primary-700 dark:text-primary-300'
-                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
-              } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-            >
-              Home
-            </Link>
             {/* Only render authenticated mobile nav items on client side */}
             {isClient && isUserAuthenticated && (
               <>
                 <Link
                   href="/dashboard"
                   className={`${
-                    pathname === '/dashboard' || pathname.startsWith('/dashboard/')
+                    isActive('/dashboard')
                       ? 'bg-primary-50 dark:bg-primary-900 border-primary-500 text-primary-700 dark:text-primary-300'
                       : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
                   } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
                 >
-                  Dashboard
+                  Home
                 </Link>
                 <Link
                   href="/dashboard/jobs"
                   className={`${
-                    pathname === '/dashboard/jobs' || pathname.startsWith('/dashboard/jobs/')
+                    isActive('/dashboard/jobs')
                       ? 'bg-primary-50 dark:bg-primary-900 border-primary-500 text-primary-700 dark:text-primary-300'
                       : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
                   } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
@@ -275,7 +282,7 @@ export default function Header() {
             <Link
               href="/about"
               className={`${
-                pathname === '/about'
+                isActive('/about')
                   ? 'bg-primary-50 dark:bg-primary-900 border-primary-500 text-primary-700 dark:text-primary-300'
                   : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
               } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
@@ -303,13 +310,7 @@ export default function Header() {
               </div>
               <div className="mt-3 space-y-1">
                 <Link
-                  href="/dashboard"
-                  className="block px-4 py-2 text-base font-medium text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/settings/profile"
+                  href="/settings"
                   className="block px-4 py-2 text-base font-medium text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   Settings

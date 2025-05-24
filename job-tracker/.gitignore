@@ -7,7 +7,7 @@ node_modules
 /coverage
 
 #admin
-backend/controller/adminController.js
+backend/controllers/adminController.js
 backend/routes/admin.js
 backend/scripts
 

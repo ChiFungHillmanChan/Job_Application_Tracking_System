@@ -93,8 +93,8 @@ const UserSchema = new mongoose.Schema({
     default: function() {
       switch(this.subscriptionTier) {
         case 'free': return 8;
-        case 'premium': return 50;
-        case 'enterprise': return -1; // unlimited
+        case 'premium': return -1;
+        case 'enterprise': return -1; 
         default: return 8;
       }
     }
@@ -104,8 +104,8 @@ const UserSchema = new mongoose.Schema({
     default: function() {
       switch(this.subscriptionTier) {
         case 'free': return 100;
-        case 'premium': return 1000;
-        case 'enterprise': return -1; // unlimited
+        case 'premium': return -1;
+        case 'enterprise': return -1; 
         default: return 100;
       }
     }

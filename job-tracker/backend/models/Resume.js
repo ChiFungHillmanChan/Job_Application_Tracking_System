@@ -1,3 +1,4 @@
+// backend/models/Resume.js - Updated version
 const mongoose = require('mongoose');
 
 const ResumeSchema = new mongoose.Schema({
@@ -14,8 +15,20 @@ const ResumeSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please add a file path'],
   },
+  originalFilename: {
+    type: String,
+    required: true,
+  },
+  mimeType: {
+    type: String,
+    required: true,
+  },
+  fileSize: {
+    type: String,
+  },
   version: {
     type: String,
+    default: '1.0',
   },
   isDefault: {
     type: Boolean,

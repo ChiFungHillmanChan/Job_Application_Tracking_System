@@ -296,7 +296,7 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   };
 
-  // Updated getCurrentUserId function in api.js
+
   const getCurrentUserId = () => {
     try {
       const token = localStorage.getItem('token');
@@ -305,44 +305,49 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         return null;
       }
       
-      if (!token.startsWith('mock-token-')) {
-        console.warn('Token format is not recognized:', token);
+      // Handle mock tokens (development mode)
+      if (token.startsWith('mock-token-')) {
+        const parts = token.split('-');
+        if (parts.length < 3) {
+          console.warn('Mock token does not contain expected parts:', token);
+          return null;
+        }
+        return parts[2];
+      }
+      
+      // Handle real JWT tokens
+      try {
+        // Decode JWT token to get user ID
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.id;
+      } catch (jwtError) {
+        console.error('Error decoding JWT token:', jwtError);
         return null;
       }
       
-      // Extract user ID directly from token
-      const parts = token.split('-');
-      if (parts.length < 3) {
-        console.warn('Token does not contain expected parts:', token);
-        return null;
-      }
-      
-      return parts[2];
     } catch (error) {
       console.error('Error retrieving user ID from token:', error);
       return null;
     }
   };
-  // Simple mock password compare function - in development mode we store plaintext passwords
+
   const matchPassword = async (enteredPassword, storedPassword) => {
     return enteredPassword === storedPassword;
   };
   
-  // Mock token generation
   const generateToken = (user) => {
     return `mock-token-${user.id}-${Date.now()}`;
   };
   
-  // Wrap API methods with mock data handling
   api.get = async function(url, config) {
     try {
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second timeout
-      // Try the real API first
+      const timeoutId = setTimeout(() => controller.abort(), 1000); 
+
       return await originalGet.call(this, url, config);
+
     } catch (error) {
-      // Check if it's a network error (server not running)
       const isNetworkError = error.message && error.message.includes('Network Error');
       if (isNetworkError) {
         console.warn(`Network error when calling ${url}. Using mock data instead.`);
@@ -671,12 +676,10 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       }
       
       // Handle resume download
-      if (url.startsWith('/resumes/') && url.includes('/download')) {
+       if (url.startsWith('/resumes/') && url.includes('/download')) {
         console.info('Using mock data for resume download');
         
-        // Extract resume ID from URL
         const resumeId = url.split('/')[2];
-        
         const userId = getCurrentUserId();
         if (!userId) {
           throw { 
@@ -690,7 +693,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           };
         }
         
-        // Check if resume exists and belongs to user
         const mockResumes = getMockResumes();
         const resume = mockResumes.find(r => r._id === resumeId && r.user === userId);
       
@@ -705,26 +707,36 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
             }
           };
         }
-        let sampleUrl = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+
+        // For mock data, create a downloadable blob
+        const mockContent = `Mock Resume: ${resume.name}\n\nThis is a sample resume file created for development purposes.\n\nFile: ${resume.file}\nVersion: ${resume.version}\nCreated: ${resume.createdAt}\nUpdated: ${resume.updatedAt}`;
         
-        if (resume.file) {
-          const ext = resume.file.substring(resume.file.lastIndexOf('.') + 1).toLowerCase();
-          if (ext === 'doc' || ext === 'docx') {
-            sampleUrl = 'https://file-examples.com/storage/fe1aa0c9d563ea1e4a2add5/2017/02/file-sample_100kB.doc';
-          }
-        }
+        const blob = new Blob([mockContent], { type: 'text/plain' });
+        const downloadUrl = URL.createObjectURL(blob);
         
-        // Return the URL directly so it can be used for download
-        return { data: sampleUrl };
+        // Trigger download
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = resume.originalFilename || `${resume.name}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+        
+        return { 
+          data: { 
+            success: true, 
+            message: 'Download started' 
+          } 
+        };
       }
+      
       
       // Handle resume preview
       if (url.startsWith('/resumes/') && url.includes('/preview')) {
         console.info('Using mock data for resume preview');
         
-        // Extract resume ID from URL
         const resumeId = url.split('/')[2];
-        
         const userId = getCurrentUserId();
         if (!userId) {
           throw { 
@@ -738,7 +750,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           };
         }
         
-         // Check if resume exists and belongs to user
         const mockResumes = getMockResumes();
         const resume = mockResumes.find(r => r._id === resumeId && r.user === userId);
         
@@ -754,21 +765,15 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
           };
         }
         
-        // For development purposes, return a URL to a sample PDF in a viewer
-        // We can use different sample URLs based on file extension
-        let previewUrl = 'https://mozilla.github.io/pdf.js/web/viewer.html?file=https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+        // For development purposes, return a data URL for preview
+        // This creates a simple text-based preview of the mock resume
+        const mockContent = `Mock Resume Preview\n\nName: ${resume.name}\nVersion: ${resume.version}\nFile: ${resume.file}\nCreated: ${new Date(resume.createdAt).toLocaleDateString()}\n\nThis is a mock resume created for development purposes. In a real application, this would display the actual PDF or document content.`;
         
-        if (resume.file) {
-          const ext = resume.file.substring(resume.file.lastIndexOf('.') + 1).toLowerCase();
-          if (ext === 'doc' || ext === 'docx') {
-            // For Word docs, we don't have a good online viewer by default
-            // So we'll use Google Docs viewer with a sample file
-            previewUrl = 'https://docs.google.com/viewer?url=https://file-examples.com/storage/fe1aa0c9d563ea1e4a2add5/2017/02/file-sample_100kB.doc&embedded=true';
-          }
-        }
+        const dataUrl = `data:text/plain;charset=utf-8,${encodeURIComponent(mockContent)}`;
         
-        // Return the preview URL
-        return { data: previewUrl };
+        return { 
+          data: dataUrl
+        };
       }
       
       // Handle individual resume retrieval
@@ -1333,7 +1338,7 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       // Handle setting a resume as default
       if (url.includes('/resumes/') && url.includes('/default')) {
         console.info('Using mock data for setting default resume');
-      
+
         const userId = getCurrentUserId();
         if (!userId) {
           throw { 
@@ -1349,13 +1354,15 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         
         // Extract resume ID from URL
         const resumeId = url.split('/')[2];
+        console.log('Setting default for resume ID:', resumeId, 'for user:', userId);
 
-         // Find the resume
+        // Find the resume
         const mockResumes = getMockResumes();        
         const resumeIndex = mockResumes.findIndex(r => r._id === resumeId && r.user === userId);
         
-        // Find the resume
         if (resumeIndex === -1) {
+          console.error('Resume not found:', resumeId, 'for user:', userId);
+          console.log('Available resumes:', mockResumes.filter(r => r.user === userId));
           throw {
             response: {
               status: 404,
@@ -1363,6 +1370,16 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
                 success: false,
                 error: 'Resume not found'
               }
+            }
+          };
+        }
+        
+        // Check if already default
+        if (mockResumes[resumeIndex].isDefault) {
+          return {
+            data: {
+              success: true,
+              data: mockResumes[resumeIndex]
             }
           };
         }
@@ -1376,7 +1393,10 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         
         // Set the selected resume as default
         mockResumes[resumeIndex].isDefault = true;
+        mockResumes[resumeIndex].updatedAt = new Date().toISOString();
         saveMockResumes(mockResumes);
+        
+        console.log('Successfully set resume as default:', resumeId);
         
         return {
           data: {

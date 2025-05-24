@@ -42,6 +42,58 @@ function SubscriptionPage() {
     }
   }, [searchParams]);
 
+  // Get current user plan ID for comparison
+  const getUserPlanId = () => {
+    switch (user?.subscriptionTier) {
+      case 'enterprise':
+        return 'pro';
+      case 'premium':
+        return 'plus';
+      case 'free':
+      default:
+        return 'free';
+    }
+  };
+
+  // Function to determine if a plan is an upgrade or downgrade
+  const getPlanRank = (planId) => {
+    switch (planId) {
+      case 'pro':
+        return 3;
+      case 'plus':
+        return 2;
+      case 'free':
+      default:
+        return 1;
+    }
+  };
+
+  // Get appropriate button text based on plan comparison
+  const getButtonText = (plan) => {
+    const currentPlanId = getUserPlanId();
+    
+    if (plan.current) {
+      return 'Current Plan';
+    }
+    
+    if (isUpgrading && selectedPlan === plan.id) {
+      return 'Processing...';
+    }
+    
+    const isUpgrade = getPlanRank(plan.id) > getPlanRank(currentPlanId);
+    const isDowngrade = getPlanRank(plan.id) < getPlanRank(currentPlanId);
+    
+    if (isUpgrade) {
+      return `Upgrade to ${plan.name}`;
+    }
+    
+    if (isDowngrade) {
+      return `Downgrade to ${plan.name}`;
+    }
+    
+    return `Select ${plan.name} Plan`;
+  };
+
   // Plan configurations
   const plans = [
     {
@@ -372,12 +424,8 @@ function SubscriptionPage() {
                       </svg>
                       Processing...
                     </div>
-                  ) : plan.current ? (
-                    'Current Plan'
-                  ) : plan.id === 'free' ? (
-                    'Downgrade to Free'
                   ) : (
-                    `Upgrade to ${plan.name}`
+                    getButtonText(plan)
                   )}
                 </button>
               </div>
@@ -416,7 +464,7 @@ function SubscriptionPage() {
               Do you offer refunds?
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              We offer a 30-day money-back guarantee for all paid plans, no questions asked.
+              We offer a 10-day money-back guarantee in certain areas. Feel free to reach out to see if your order qualifies!
             </p>
           </div>
           

@@ -185,6 +185,66 @@ function ResumesSettings() {
     }
   };
   
+  const handleDownloadResume = async (resumeId) => {
+    try {
+      const resume = resumes.find(r => r._id === resumeId);
+      
+      if (resumeId.startsWith('mock-resume-')) {
+        // Handle mock download
+        const mockContent = `Mock Resume: ${resume.name}\n\nThis is a sample resume file created for development purposes.\n\nFile: ${resume.file}\nVersion: ${resume.version}\nCreated: ${resume.createdAt}\nUpdated: ${resume.updatedAt}`;
+        
+        const blob = new Blob([mockContent], { type: 'text/plain' });
+        const downloadUrl = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = resume.originalFilename || `${resume.name}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      } else {
+        // For real backend, make authenticated request
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+        const token = localStorage.getItem('token');
+        
+        const response = await fetch(`${backendUrl}/resumes/${resumeId}/download?token=${encodeURIComponent(token)}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const downloadUrl = URL.createObjectURL(blob);
+          
+          // Get filename from Content-Disposition header
+          const contentDisposition = response.headers.get('content-disposition');
+          let filename = `${resume.name}.pdf`;
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (filenameMatch) {
+              filename = filenameMatch[1];
+            }
+          }
+          
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(downloadUrl);
+        } else {
+          throw new Error('Download failed');
+        }
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      setResumeError('Failed to download resume. Please try again.');
+    }
+  };
+
   const handleSetDefault = async (resumeId) => {
     try {
       const response = await resumeService.setDefaultResume(resumeId);
@@ -429,15 +489,9 @@ function ResumesSettings() {
                                 Resume
                               </th>
                               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Version
-                              </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Last Updated
-                              </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                 Status
                               </th>
-                              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              <th scope="col" className="px-6 py-3 text-middle text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                 Actions
                               </th>
                             </tr>
@@ -464,20 +518,8 @@ function ResumesSettings() {
                                           </Link>
                                         </div>
                                       </div>
-                                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                                        {resume.fileSize || 'N/A'}
-                                      </div>
                                     </div>
                                   </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900 dark:text-white">{resume.version || '1.0'}</div>
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                                    Created {formatDate(resume.createdAt)}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                  {formatDate(resume.updatedAt)}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   {resume.isDefault ? (
@@ -502,8 +544,11 @@ function ResumesSettings() {
                                       Preview
                                     </Link>
                                     <a
-                                      href={resumeService.getDownloadUrl(resume._id)}
-                                      download
+                                      href="#"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        handleDownloadResume(resume._id);
+                                      }}
                                       className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
                                     >
                                       Download

@@ -167,7 +167,7 @@ const subscriptionService = {
   getPlanLimits: (tier) => {
     const planLimits = {
       free: {
-        resumes: 8,
+        resumes: 5,
         jobApplications: 50,
         features: [
           'Basic application tracking',

@@ -1,17 +1,15 @@
-// src/lib/resumeService.js
+// src/lib/resumeService.js - Updated version
 import api from './api';
 
 const resumeService = {
   /**
    * Get all resumes for the current authenticated user
-   * @returns {Promise<Object>} Response containing success status and resumes data
    */
   getAllResumes: async () => {
     try {
       console.log('Fetching resumes from API...');
       const response = await api.get('/resumes');
       
-      // Add defensive programming to handle different response formats
       if (!response) {
         console.warn('API response is undefined, returning empty data');
         return { success: true, data: [], count: 0 };
@@ -24,19 +22,15 @@ const resumeService = {
       
       console.log('Resume API response:', response.data);
       
-      // Handle different response formats
       if (response.data.success !== undefined) {
-        // Standard API response format
         return response.data;
       } else if (Array.isArray(response.data)) {
-        // Direct array response
         return {
           success: true,
           data: response.data,
           count: response.data.length
         };
       } else {
-        // Unknown format, wrap it
         return {
           success: true,
           data: response.data.data || response.data || [],
@@ -45,17 +39,12 @@ const resumeService = {
       }
     } catch (error) {
       console.error('Error fetching resumes:', error);
-      // Return empty array instead of throwing
       return { success: true, data: [], count: 0 };
     }
   },
 
   /**
    * Upload a new resume
-   * @param {string} name - Name of the resume
-   * @param {File} file - Resume file to upload
-   * @param {string} version - Version number (defaults to '1.0')
-   * @returns {Promise<Object>} Response containing success status and resume data
    */
   uploadResume: async (name, file, version = '1.0') => {
     try {
@@ -70,7 +59,6 @@ const resumeService = {
         },
       });
       
-      // Handle response format defensively
       if (!response || !response.data) {
         throw new Error('Invalid response from server');
       }
@@ -84,8 +72,6 @@ const resumeService = {
 
   /**
    * Get a single resume by ID
-   * @param {string} resumeId - ID of the resume to retrieve
-   * @returns {Promise<Object>} Response containing success status and resume data
    */
   getResume: async (resumeId) => {
     try {
@@ -104,8 +90,6 @@ const resumeService = {
 
   /**
    * Set a resume as the default resume
-   * @param {string} resumeId - ID of the resume to set as default
-   * @returns {Promise<Object>} Response containing success status and updated resume data
    */
   setDefaultResume: async (resumeId) => {
     try {
@@ -124,26 +108,42 @@ const resumeService = {
 
   /**
    * Get the download URL for a resume
-   * @param {string} resumeId - ID of the resume to download
-   * @returns {string} URL for downloading the resume
+   * Uses Next.js API route for proper authentication
    */
   getDownloadUrl: (resumeId) => {
-    return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/resumes/${resumeId}/download`;
+    // Get token from localStorage for authentication
+    let token = '';
+    try {
+      token = localStorage.getItem('token') || '';
+    } catch (e) {
+      console.warn('Could not access localStorage:', e);
+    }
+    
+    // Use Next.js API route which handles authentication and proxies to backend
+    const url = `/api/resumes/${resumeId}/download`;
+    return token ? `${url}?token=${encodeURIComponent(token)}` : url;
   },
 
   /**
    * Get the preview URL for a resume
-   * @param {string} resumeId - ID of the resume to preview
-   * @returns {string} URL for previewing the resume
+   * Uses Next.js API route for proper authentication
    */
   getPreviewUrl: (resumeId) => {
-    return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/resumes/${resumeId}/preview`;
+    // Get token from localStorage for authentication
+    let token = '';
+    try {
+      token = localStorage.getItem('token') || '';
+    } catch (e) {
+      console.warn('Could not access localStorage:', e);
+    }
+    
+    // Use Next.js API route which handles authentication and proxies to backend
+    const url = `/api/resumes/${resumeId}/preview`;
+    return token ? `${url}?token=${encodeURIComponent(token)}` : url;
   },
 
   /**
    * Delete a resume
-   * @param {string} resumeId - ID of the resume to delete
-   * @returns {Promise<Object>} Response containing success status
    */
   deleteResume: async (resumeId) => {
     try {
@@ -157,6 +157,36 @@ const resumeService = {
     } catch (error) {
       console.error(`Error deleting resume ${resumeId}:`, error);
       throw error;
+    }
+  },
+
+  /**
+   * Check if a resume file exists and is accessible
+   */
+  checkResumeAccess: async (resumeId) => {
+    try {
+      // Get token from localStorage
+      let token = '';
+      try {
+        token = localStorage.getItem('token') || '';
+      } catch (e) {
+        console.warn('Could not access localStorage:', e);
+        return false;
+      }
+
+      const url = `/api/resumes/${resumeId}/preview${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+      
+      const response = await fetch(url, {
+        method: 'HEAD', // Only check headers, don't download content
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.error(`Error checking resume access ${resumeId}:`, error);
+      return false;
     }
   }
 };

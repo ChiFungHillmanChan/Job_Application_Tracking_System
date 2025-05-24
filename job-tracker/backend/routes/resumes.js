@@ -1,4 +1,4 @@
-// backend/routes/resumes.js
+// backend/routes/resumes.js - Fixed version
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
@@ -16,13 +16,16 @@ const {
 } = require('../controllers/resumeController');
 const router = express.Router();
 
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '../uploads/resumes');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 // Configure multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Create uploads directory if it doesn't exist
-    const uploadDir = path.join(__dirname, '../uploads/resumes');
-    fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     // Create unique filename with original extension
@@ -56,12 +59,18 @@ router.route('/')
   .get(protect, getResumes)
   .post(protect, upload.single('resumeFile'), uploadResume);
 
+// IMPORTANT: Put specific routes BEFORE parameterized routes
+router.put('/:id/default', protect, setDefaultResume);
+
+// Download route - serves actual file
+router.get('/:id/download', protect, downloadResume);
+
+// Preview route - serves file with inline disposition
+router.get('/:id/preview', protect, previewResume);
+
+// General routes for specific resume
 router.route('/:id')
   .get(protect, getResume)
   .delete(protect, deleteResume);
-
-router.put('/:id/default', protect, setDefaultResume);
-router.get('/:id/download', protect, downloadResume);
-router.get('/:id/preview', protect, previewResume);
 
 module.exports = router;

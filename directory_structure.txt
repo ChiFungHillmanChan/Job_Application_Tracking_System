@@ -7,14 +7,11 @@
 │   │   │   ├── db.js
 │   │   │   └── env.js
 │   │   ├── controllers
+│   │   │   ├── adminController.js
 │   │   │   ├── authController.js
 │   │   │   ├── jobController.js
-│   │   │   └── resumeController.js
-│   │   ├── debug-cors-server.js
-│   │   ├── env-check.js
-│   │   ├── full-debug-server.js
-│   │   ├── import-test.js
-│   │   ├── inspect-path-to-regexp.js
+│   │   │   ├── resumeController.js
+│   │   │   └── subscriptionController.js
 │   │   ├── logs
 │   │   │   ├── combined.log
 │   │   │   └── error.log
@@ -27,23 +24,29 @@
 │   │   │   └── User.js
 │   │   ├── package-lock.json
 │   │   ├── package.json
-│   │   ├── route-by-route-server.js
-│   │   ├── route-debug.server.js
-│   │   ├── route-file-checker.js
 │   │   ├── routes
+│   │   │   ├── admin.js
 │   │   │   ├── auth.js
 │   │   │   ├── jobs.js
-│   │   │   └── resumes.js
+│   │   │   ├── resumes.js
+│   │   │   └── subscription.js
+│   │   ├── scripts
+│   │   │   └── createSuperUser.js
 │   │   ├── server.js
-│   │   ├── simple-cors-test.js
-│   │   ├── test-server.js
-│   │   ├── trace-error-source.js
-│   │   ├── ultra-minimal-server.js
-│   │   ├── utils
-│   │   │   ├── logger.js
-│   │   │   ├── sendEmail.js
-│   │   │   └── tokenManager.js
-│   │   └── version-check.js
+│   │   ├── uploads
+│   │   │   └── resumes
+│   │   │       ├── 0229a193-749f-4535-a07c-12c8c6aef56b.pdf
+│   │   │       ├── 12846b8b-e904-40d5-8fc4-9df8d801b0ef.pdf
+│   │   │       ├── 2fb92f1b-69d9-4124-85a7-cd5603789862.pdf
+│   │   │       ├── 48ebc04a-0cfa-458d-b502-01e92378e77a.pdf
+│   │   │       ├── ac92f2b2-60bc-4ab9-b5d5-308d582a02fb.pdf
+│   │   │       ├── b839cc76-bd6c-4ad9-848a-c0090e524d77.pdf
+│   │   │       ├── dffd61c7-15c0-48fc-9fdf-69407b9c19a5.pdf
+│   │   │       └── f7c34c6e-4c14-4dc6-a2c7-54d5be7b6131.pdf
+│   │   └── utils
+│   │       ├── logger.js
+│   │       ├── sendEmail.js
+│   │       └── tokenManager.js
 │   ├── eslint.config.mjs
 │   ├── jsconfig.json
 │   ├── next.config.js
@@ -101,7 +104,11 @@
 │   │   │   ├── page.jsx
 │   │   │   ├── resume
 │   │   │   │   └── [id]
-│   │   │   │       └── page.jsx
+│   │   │   │       ├── download
+│   │   │   │       │   └── route.js
+│   │   │   │       ├── page.jsx
+│   │   │   │       └── preview
+│   │   │   │           └── route.js
 │   │   │   └── settings
 │   │   │       ├── account
 │   │   │       │   └── page.jsx
@@ -110,10 +117,13 @@
 │   │   │       ├── page.jsx
 │   │   │       ├── profile
 │   │   │       │   └── page.jsx
-│   │   │       └── resumes
+│   │   │       ├── resumes
+│   │   │       │   └── page.jsx
+│   │   │       └── subscription
 │   │   │           └── page.jsx
 │   │   ├── components
 │   │   │   ├── authWrapper.jsx
+│   │   │   ├── BillingHistory.jsx
 │   │   │   ├── DashboardError.jsx
 │   │   │   ├── forms
 │   │   │   │   ├── ForgotPasswordForm.jsx
@@ -137,6 +147,7 @@
 │   │   │   │   └── useAuth.js
 │   │   │   ├── jobService.js
 │   │   │   ├── resumeService.js
+│   │   │   ├── subscriptionService.js
 │   │   │   ├── utils
 │   │   │   └── withAuth.js
 │   │   └── styles
@@ -144,4 +155,4 @@
 │   └── tailwind.config.js
 └── README.md
 
-47 directories, 98 files
+53 directories, 103 files

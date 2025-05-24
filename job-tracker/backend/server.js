@@ -18,8 +18,6 @@ connectDB();
 
 const app = express();
 
-// FIXED CORS Configuration - using simple approach that works
-console.log('Setting up CORS...');
 
 // Build allowed origins array
 const allowedOrigins = [
@@ -38,23 +36,41 @@ console.log('Allowed origins:', allowedOrigins);
 
 // Use simple CORS configuration
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
   allowedHeaders: [
     'Content-Type', 
     'Authorization', 
     'X-Requested-With',
     'Accept',
-    'Origin'
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers',
+    'Cache-Control'
   ],
-  optionsSuccessStatus: 200
+  exposedHeaders: [
+    'Content-Length', 
+    'X-Request-ID', 
+    'Content-Disposition',
+    'Content-Type'
+  ],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 // Handle preflight requests
 app.options('*', cors());
-
-console.log('✅ CORS configured successfully');
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -96,7 +112,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/resumes', require('./routes/resumes'));
 
-console.log('✅ API routes loaded');
+console.log('API routes loaded');
 
 // Serve static files from uploads directory
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -116,10 +132,10 @@ const PORT = process.env.PORT || 5001;
 
 const server = app.listen(PORT, () => {
   logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-  console.log(`🚀 Server started successfully!`);
-  console.log(`📍 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
-  console.log(`🌐 Allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log(`Server started successfully!`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`API Base URL: http://localhost:${PORT}/api`);
+  console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
 });
 
 // Handle unhandled promise rejections
@@ -132,8 +148,8 @@ process.on('unhandledRejection', (err, promise) => {
 // Handle SIGTERM
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received');
-  console.log('👋 SIGTERM received, shutting down gracefully');
+  console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
-    console.log('💤 Process terminated');
+    console.log('Process terminated');
   });
 });
