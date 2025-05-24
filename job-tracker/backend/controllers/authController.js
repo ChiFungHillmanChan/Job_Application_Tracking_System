@@ -215,14 +215,14 @@ const forgotPassword = asyncHandler(async (req, res) => {
     }
 
     // Check if user recently requested a password reset (rate limiting)
-    if (user.resetPasswordExpire && user.resetPasswordExpire > Date.now()) {
-      const timeLeft = Math.ceil((user.resetPasswordExpire - Date.now()) / 1000 / 60); // minutes
-      logger.warn(`Password reset rate limit hit for email: ${email}, ${timeLeft} minutes remaining`);
-      return res.status(429).json({
-        success: false,
-        error: `Please wait ${timeLeft} minutes before requesting another password reset`
-      });
-    }
+    // if (user.resetPasswordExpire && user.resetPasswordExpire > Date.now()) {
+    //   const timeLeft = Math.ceil((user.resetPasswordExpire - Date.now()) / 1000 / 60); // minutes
+    //   logger.warn(`Password reset rate limit hit for email: ${email}, ${timeLeft} minutes remaining`);
+    //   return res.status(429).json({
+    //     success: false,
+    //     error: `Please wait ${timeLeft} minutes before requesting another password reset`
+    //   });
+    // }
 
     // Get reset token
     const { resetToken, resetPasswordToken, resetPasswordExpire } = generateResetPasswordToken();

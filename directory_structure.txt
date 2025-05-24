@@ -1,4 +1,5 @@
 .
+├── clean_structure.txt
 ├── directory_structure.txt
 ├── job-tracker
 │   ├── backend
@@ -7,7 +8,6 @@
 │   │   │   ├── db.js
 │   │   │   └── env.js
 │   │   ├── controllers
-│   │   │   ├── adminController.js
 │   │   │   ├── authController.js
 │   │   │   ├── jobController.js
 │   │   │   ├── resumeController.js
@@ -31,7 +31,8 @@
 │   │   │   ├── resumes.js
 │   │   │   └── subscription.js
 │   │   ├── scripts
-│   │   │   └── createSuperUser.js
+│   │   │   ├── createSuperUser.js
+│   │   │   └── migrateResumes.js
 │   │   ├── server.js
 │   │   ├── uploads
 │   │   │   └── resumes
@@ -88,7 +89,7 @@
 │   │   │   │   │   └── page.jsx
 │   │   │   │   └── resetpassword
 │   │   │   │       └── [token]
-│   │   │   │           └── pages.jsx
+│   │   │   │           └── page.jsx
 │   │   │   ├── dashboard
 │   │   │   │   ├── jobs
 │   │   │   │   │   ├── new
@@ -155,4 +156,4 @@
 │   └── tailwind.config.js
 └── README.md
 
-53 directories, 103 files
+53 directories, 104 files
