@@ -1,5 +1,4 @@
 .
-├── clean_structure.txt
 ├── directory_structure.txt
 ├── job-tracker
 │   ├── backend
@@ -139,10 +138,12 @@
 │   │   │   └── ui
 │   │   │       ├── Button.jsx
 │   │   │       ├── Card.jsx
+│   │   │       ├── ColorPicker.jsx
 │   │   │       ├── Input.jsx
 │   │   │       └── Select.jsx
 │   │   ├── lib
 │   │   │   ├── api.js
+│   │   │   ├── appearaceUtils.js
 │   │   │   ├── authDebug.js
 │   │   │   ├── hooks
 │   │   │   │   └── useAuth.js
@@ -156,4 +157,4 @@
 │   └── tailwind.config.js
 └── README.md
 
-53 directories, 104 files
+53 directories, 105 files

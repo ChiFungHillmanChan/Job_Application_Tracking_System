@@ -478,6 +478,13 @@ const updateProfile = asyncHandler(async (req, res) => {
     }
     user.email = email;
   }
+
+  if (preferences && preferences.appearance) {
+    user.preferences = {
+      ...user.preferences,
+      appearance: preferences.appearance
+    };
+  }
   
   // Save user
   await user.save();
