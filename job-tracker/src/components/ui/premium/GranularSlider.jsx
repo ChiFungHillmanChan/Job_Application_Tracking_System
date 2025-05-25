@@ -16,10 +16,11 @@ const GranularSlider = ({
   showInput = true,
   showPresets = true,
   className = '',
-  requiredTier = 'premium'
+  requiredTier = 'plus'
 }) => {
   const [currentValue, setCurrentValue] = useState(value);
   const [isDragging, setIsDragging] = useState(false);
+  const [isInteracting, setIsInteracting] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const sliderRef = useRef(null);
   const inputRef = useRef(null);
@@ -29,16 +30,19 @@ const GranularSlider = ({
     setCurrentValue(value);
   }, [value]);
 
-  // Handle value change
-  const handleValueChange = (newValue) => {
-    // Ensure value is within bounds
-    const clampedValue = Math.min(Math.max(newValue, min), max);
-    // Round to step precision
-    const steppedValue = Math.round(clampedValue / step) * step;
-    
-    setCurrentValue(steppedValue);
-    onChange?.(steppedValue);
-  };
+const handleValueChange = (newValue) => {
+  const clampedValue = Math.min(Math.max(newValue, min), max);
+  const steppedValue = Math.round(clampedValue / step) * step;
+  
+  setIsInteracting(true);
+  setCurrentValue(steppedValue);
+  onChange?.(steppedValue);
+  
+  // Clear interaction flag after a delay
+  setTimeout(() => {
+    setIsInteracting(false);
+  }, 500);
+};
 
   // Handle slider input
   const handleSliderChange = (e) => {

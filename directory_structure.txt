@@ -35,7 +35,8 @@
 │   │   │   └── theme.js
 │   │   ├── scripts
 │   │   │   ├── createSuperUser.js
-│   │   │   └── migrateResumes.js
+│   │   │   ├── migrateResumes.js
+│   │   │   └── upgradeUser.js
 │   │   ├── server.js
 │   │   ├── uploads
 │   │   │   └── resumes
@@ -59,6 +60,7 @@
 │   ├── package.json
 │   ├── postcss.config.js
 │   ├── postcss.config.mjs
+│   ├── preference.txt
 │   ├── public
 │   │   ├── file.svg
 │   │   ├── globe.svg
@@ -178,4 +180,4 @@
 │   └── tailwind.config.js
 └── README.md
 
-57 directories, 122 files
+57 directories, 124 files

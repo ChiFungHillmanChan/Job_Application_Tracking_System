@@ -45,9 +45,9 @@ function SubscriptionPage() {
   // Get current user plan ID for comparison
   const getUserPlanId = () => {
     switch (user?.subscriptionTier) {
-      case 'enterprise':
+      case 'pro':
         return 'pro';
-      case 'premium':
+      case 'plus':
         return 'plus';
       case 'free':
       default:
@@ -135,7 +135,7 @@ function SubscriptionPage() {
       ],
       limitations: [],
       popular: true,
-      current: user?.subscriptionTier === 'premium'
+      current: user?.subscriptionTier === 'plus'
     },
     {
       id: 'pro',
@@ -155,7 +155,7 @@ function SubscriptionPage() {
       ],
       limitations: [],
       popular: false,
-      current: user?.subscriptionTier === 'enterprise'
+      current: user?.subscriptionTier === 'pro'
     }
   ];
 

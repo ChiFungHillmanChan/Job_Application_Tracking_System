@@ -404,7 +404,7 @@ const FontFamilySelector = ({
     <div className="relative">
       <PremiumFeatureLock
         feature="advanced_typography"
-        requiredTier="premium"
+        requiredTier="plus"
         showPreview={true}
       >
         <FontSelectorContent />

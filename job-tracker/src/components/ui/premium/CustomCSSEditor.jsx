@@ -603,7 +603,7 @@ const CustomCSSEditor = ({
   return (
     <PremiumFeatureLock
       feature="custom_css"
-      requiredTier="enterprise"
+      requiredTier="pro"
       showPreview={true}
     >
       <CSSEditorContent />

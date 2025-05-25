@@ -282,14 +282,14 @@ export const PREMIUM_THEME_TEMPLATES = {
   'corporate-blue': {
     id: 'corporate-blue',
     name: 'Corporate Blue',
-    description: 'Professional blue theme for enterprise environments',
+    description: 'Professional blue theme for pro environments',
     category: 'professional',
     isPremium: false,
     preview: '/themes/corporate-blue-preview.jpg',
     author: 'JobTracker Team',
     downloads: 5200,
     rating: 4.5,
-    tags: ['corporate', 'professional', 'blue', 'enterprise'],
+    tags: ['corporate', 'professional', 'blue', 'pro'],
     config: {
       theme: 'light',
       colorScheme: 'default',
@@ -344,11 +344,7 @@ export class PremiumThemeManager {
     this.recentThemes = [];
   }
 
-  /**
-   * Get all available themes
-   * @param {string} category - Filter by category
-   * @param {boolean} premiumOnly - Show only premium themes
-   */
+
   getThemes(category = 'all', premiumOnly = false) {
     let themes = Object.values(PREMIUM_THEME_TEMPLATES);
     

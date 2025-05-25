@@ -7,7 +7,7 @@ import Link from 'next/link';
 const PremiumFeatureLock = ({ 
   children, 
   feature, 
-  requiredTier = 'premium',
+  requiredTier = 'plus',
   showPreview = true,
   customMessage,
   className = ''
@@ -17,18 +17,26 @@ const PremiumFeatureLock = ({
 
   // Check if user has required subscription tier
   const hasAccess = () => {
-    if (!isAuthenticated() || !user) return false;
+    if (!isAuthenticated() || !user) {
+      console.log('🔒 Access denied: User not authenticated');
+      return false;
+    }
     
     const tierLevels = {
       'free': 0,
-      'premium': 1,
-      'enterprise': 2
+      'plus': 1,
+      'pro': 2
     };
     
-    const userLevel = tierLevels[user.subscriptionTier] || 0;
+    const userLevel = tierLevels[user.subscriptionTier] ;
     const requiredLevel = tierLevels[requiredTier] || 1;
     
-    return userLevel >= requiredLevel;
+    console.log(`🔍 Access check: User tier "${user.subscriptionTier}" (level ${userLevel}) vs required "${requiredTier}" (level ${requiredLevel})`);
+    
+    const hasPermission = userLevel >= requiredLevel;
+    console.log(`${hasPermission ? '✅' : '❌'} Access ${hasPermission ? 'granted' : 'denied'}`);
+    
+    return hasPermission;
   };
 
   const getFeatureDescription = (feature) => {
@@ -45,27 +53,26 @@ const PremiumFeatureLock = ({
       'team_sharing': 'Share themes and collaborate with team members'
     };
     
-    return descriptions[feature] || 'Access premium appearance customization features';
+    return descriptions[feature] || 'Access plus appearance customization features';
   };
 
   const getTierBadge = (tier) => {
     const badges = {
-      'premium': {
+      'plus': {
         name: 'Plus',
         color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
         price: '£8.88/month'
       },
-      'enterprise': {
+      'pro': {
         name: 'Pro',
         color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
         price: '£38.88/month'
       }
     };
     
-    return badges[tier] || badges.premium;
+    return badges[tier] || badges.plus;
   };
 
-  // If user has access, render children normally
   if (hasAccess()) {
     return <div className={className}>{children}</div>;
   }
@@ -142,7 +149,7 @@ const PremiumFeatureLock = ({
                   {tierInfo.name} Plan - {tierInfo.price}
                 </h4>
                 <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                  {requiredTier === 'premium' ? (
+                  {requiredTier === 'plus' ? (
                     <>
                       <li className="flex items-center">
                         <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">

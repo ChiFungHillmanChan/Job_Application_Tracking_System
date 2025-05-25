@@ -1,7 +1,7 @@
-// backend/models/User.js - Enhanced version
+// backend/models/User.js - Updated subscription tiers
+
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
 
 const UserSchema = new mongoose.Schema({
   name: {
@@ -55,13 +55,61 @@ const UserSchema = new mongoose.Schema({
         default: true,
       },
     },
+    // Enhanced appearance preferences
+    appearance: {
+      theme: {
+        type: String,
+        enum: ['light', 'dark', 'system'],
+        default: 'system',
+      },
+      colorScheme: {
+        type: String,
+        enum: ['default', 'green', 'purple', 'red', 'orange'],
+        default: 'default',
+      },
+      density: {
+        type: String,
+        enum: ['compact', 'default', 'comfortable'],
+        default: 'default',
+      },
+      fontSize: {
+        type: String,
+        enum: ['small', 'default', 'large'],
+        default: 'default',
+      },
+      statusColors: {
+        type: Object,
+        default: {
+          'Saved': 'blue',
+          'Applied': 'purple',
+          'Phone Screen': 'yellow',
+          'Interview': 'yellow',
+          'Technical Assessment': 'yellow',
+          'Offer': 'green',
+          'Rejected': 'red',
+          'Withdrawn': 'red',
+        }
+      },
+      lastModified: {
+        type: Number,
+        default: Date.now
+      }
+    },
+    lastModified: {
+      type: Number,
+      default: Date.now
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
   },
+  // FIXED: Updated subscription tiers to match premium components
   subscriptionTier: {
     type: String,
-    enum: ['free', 'premium', 'enterprise'],
+    enum: ['free', 'plus', 'pro'], 
     default: 'free',
   },
-  // Enhanced subscription fields for super users
   subscriptionStatus: {
     type: String,
     enum: ['active', 'inactive', 'cancelled', 'past_due'],
@@ -73,7 +121,7 @@ const UserSchema = new mongoose.Schema({
   },
   subscriptionEndDate: {
     type: Date,
-    default: null // null means no end date (lifetime)
+    default: null
   },
   isLifetimeSubscription: {
     type: Boolean,
@@ -87,14 +135,14 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  // Usage limits (for super users, set to -1 for unlimited)
+  // Usage limits (for premium users, set to -1 for unlimited)
   maxResumes: {
     type: Number,
     default: function() {
       switch(this.subscriptionTier) {
         case 'free': return 8;
-        case 'premium': return -1;
-        case 'enterprise': return -1; 
+        case 'plus': return -1; 
+        case 'pro': return -1; 
         default: return 8;
       }
     }
@@ -104,13 +152,12 @@ const UserSchema = new mongoose.Schema({
     default: function() {
       switch(this.subscriptionTier) {
         case 'free': return 100;
-        case 'premium': return -1;
-        case 'enterprise': return -1; 
+        case 'plus': return -1; // Changed from 1000 to unlimited
+        case 'pro': return -1; 
         default: return 100;
       }
     }
   },
-  // Role for admin access
   role: {
     type: String,
     enum: ['user', 'admin', 'superadmin'],
@@ -120,6 +167,23 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+});
+
+// Update usage limits when subscription tier changes
+UserSchema.pre('save', function(next) {
+  if (this.isModified('subscriptionTier')) {
+    if (this.subscriptionTier === 'pro' || this.isLifetimeSubscription) {
+      this.maxResumes = -1;
+      this.maxApplications = -1;
+    } else if (this.subscriptionTier === 'plus') {
+      this.maxResumes = -1;
+      this.maxApplications = -1;
+    } else {
+      this.maxResumes = 8;
+      this.maxApplications = 100;
+    }
+  }
+  next();
 });
 
 // Method to check if subscription is active
@@ -132,7 +196,16 @@ UserSchema.methods.isSubscriptionActive = function() {
 
 // Method to check if user has unlimited access
 UserSchema.methods.hasUnlimitedAccess = function() {
-  return this.subscriptionTier === 'enterprise' || this.isLifetimeSubscription;
+  return this.subscriptionTier === 'pro' || 
+         this.subscriptionTier === 'plus' || 
+         this.isLifetimeSubscription;
+};
+
+// Method to check if user has premium features
+UserSchema.methods.hasPremiumAccess = function() {
+  return this.subscriptionTier === 'pro' || 
+         this.subscriptionTier === 'plus' || 
+         this.isLifetimeSubscription;
 };
 
 // Method to get current usage limits
@@ -143,8 +216,8 @@ UserSchema.methods.getUsageLimits = function() {
   };
 };
 
+// Password hashing and other methods remain the same...
 UserSchema.pre('save', async function (next) {
-  // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) {
     return next();
   }
@@ -152,20 +225,17 @@ UserSchema.pre('save', async function (next) {
   try {
     console.log('🔐 Hashing password for user:', this.email);
     
-    // FIXED: Ensure password exists and is a string
     if (!this.password || typeof this.password !== 'string') {
       console.log('❌ Invalid password provided:', typeof this.password);
       const error = new Error('Password must be a valid string');
       return next(error);
     }
 
-    // FIXED: Generate salt and hash password
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     
     console.log('✅ Password hashed successfully');
     
-    // If password is modified and it's not a new user, update passwordChangedAt
     if (this.isModified('password') && !this.isNew) {
       this.passwordChangedAt = Date.now();
     }
@@ -177,24 +247,6 @@ UserSchema.pre('save', async function (next) {
   }
 });
 
-// Update usage limits when subscription tier changes
-UserSchema.pre('save', function(next) {
-  if (this.isModified('subscriptionTier')) {
-    if (this.subscriptionTier === 'enterprise' || this.isLifetimeSubscription) {
-      this.maxResumes = -1;
-      this.maxApplications = -1;
-    } else if (this.subscriptionTier === 'premium') {
-      this.maxResumes = 50;
-      this.maxApplications = 1000;
-    } else {
-      this.maxResumes = 8;
-      this.maxApplications = 100;
-    }
-  }
-  next();
-});
-
-// Match user entered password to hashed password in database
 UserSchema.methods.matchPassword = async function (enteredPassword) {
   try {
     if (!enteredPassword || !this.password) {
@@ -206,4 +258,5 @@ UserSchema.methods.matchPassword = async function (enteredPassword) {
     return false;
   }
 };
+
 module.exports = mongoose.model('User', UserSchema);

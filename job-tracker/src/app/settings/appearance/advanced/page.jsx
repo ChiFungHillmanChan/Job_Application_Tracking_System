@@ -32,19 +32,20 @@ function AdvancedAppearanceSettings() {
   const [activeSection, setActiveSection] = useState('colors');
   const [customCSS, setCustomCSS] = useState('');
   const [previewMode, setPreviewMode] = useState(false);
+  const [isChangingSettings, setIsChangingSettings] = useState(false);
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
     setTimeout(() => setMessage({ type: '', text: '' }), 4000);
   };
 
-  // Check if user has premium access
-  const hasPremiumAccess = () => {
-    return user?.subscriptionTier === 'premium' || user?.subscriptionTier === 'enterprise';
+  // Check if user has plus access (renamed from premium)
+  const hasPlusAccess = () => {
+    return user?.subscriptionTier === 'plus' || user?.subscriptionTier === 'pro';
   };
 
-  const hasEnterpriseAccess = () => {
-    return user?.subscriptionTier === 'enterprise';
+  const hasProAccess = () => {
+    return user?.subscriptionTier === 'pro';
   };
 
   // Handle save
@@ -65,9 +66,11 @@ function AdvancedAppearanceSettings() {
     }
   };
 
-  // Handle custom CSS change
+  // Handle custom CSS change with interaction tracking
   const handleCustomCSSChange = (css) => {
+    setIsChangingSettings(true);
     setCustomCSS(css);
+    
     // Apply CSS in real-time if in preview mode
     if (previewMode) {
       const existingStyle = document.getElementById('custom-css-live');
@@ -82,16 +85,32 @@ function AdvancedAppearanceSettings() {
         document.head.appendChild(style);
       }
     }
+    
+    // Reset the changing flag after a delay
+    setTimeout(() => {
+      setIsChangingSettings(false);
+    }, 500);
+  };
+
+  // Handle setting changes with interaction tracking
+  const handleSettingChange = (key, value) => {
+    setIsChangingSettings(true);
+    updateSetting(key, value);
+    
+    // Reset the changing flag after a delay
+    setTimeout(() => {
+      setIsChangingSettings(false);
+    }, 500);
   };
 
   // Navigation sections
   const sections = [
-    { id: 'colors', name: 'Advanced Colors', icon: '🎨', premium: true },
-    { id: 'typography', name: 'Typography', icon: '📝', premium: true },
-    { id: 'spacing', name: 'Spacing & Layout', icon: '📐', premium: true },
-    { id: 'effects', name: 'Visual Effects', icon: '✨', premium: true },
-    { id: 'css', name: 'Custom CSS', icon: '💻', premium: true, enterprise: true },
-    { id: 'components', name: 'Components', icon: '🧩', premium: true }
+    { id: 'colors', name: 'Advanced Colors', icon: '🎨', plus: true },
+    { id: 'typography', name: 'Typography', icon: '📝', plus: true },
+    { id: 'spacing', name: 'Spacing & Layout', icon: '📐', plus: true },
+    { id: 'effects', name: 'Visual Effects', icon: '✨', plus: true },
+    { id: 'css', name: 'Custom CSS', icon: '💻', plus: true, pro: true },
+    { id: 'components', name: 'Components', icon: '🧩', plus: true }
   ];
 
   return (
@@ -126,13 +145,13 @@ function AdvancedAppearanceSettings() {
             </p>
           </div>
           
-          {/* Premium badge */}
+          {/* Plus badge */}
           <div className="flex items-center space-x-2">
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 dark:from-purple-900 dark:to-pink-900 dark:text-purple-200">
               <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
-              Premium Features
+              Plus Features
             </span>
           </div>
         </div>
@@ -166,7 +185,14 @@ function AdvancedAppearanceSettings() {
               {sections.map(section => (
                 <button
                   key={section.id}
-                  onClick={() => setActiveSection(section.id)}
+                  onClick={() => {
+                    // Prevent tab switching if user is actively changing settings
+                    if (isChangingSettings) {
+                      console.log('🔒 Tab switch prevented: user is changing settings');
+                      return;
+                    }
+                    setActiveSection(section.id);
+                  }}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
                     activeSection === section.id
                       ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
@@ -178,14 +204,14 @@ function AdvancedAppearanceSettings() {
                     {section.name}
                   </div>
                   
-                  {section.premium && (
+                  {section.plus && (
                     <div className="flex items-center space-x-1">
-                      {section.enterprise && (
+                      {section.pro && (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300">
                           Pro
                         </span>
                       )}
-                      {!section.enterprise && (
+                      {!section.pro && (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
                           Plus
                         </span>
@@ -260,7 +286,7 @@ function AdvancedAppearanceSettings() {
                   <AdvancedColorPicker
                     label="Primary Color"
                     value="#0ea5e9"
-                    onChange={(color) => updateSetting('primaryColor', color)}
+                    onChange={(color) => handleSettingChange('primaryColor', color)}
                     showPresets={true}
                     showHarmony={true}
                   />
@@ -269,7 +295,7 @@ function AdvancedAppearanceSettings() {
                   <AdvancedColorPicker
                     label="Secondary Color" 
                     value="#64748b"
-                    onChange={(color) => updateSetting('secondaryColor', color)}
+                    onChange={(color) => handleSettingChange('secondaryColor', color)}
                     showPresets={true}
                     showHarmony={true}
                   />
@@ -278,7 +304,7 @@ function AdvancedAppearanceSettings() {
                   <AdvancedColorPicker
                     label="Accent Color"
                     value="#f59e0b"
-                    onChange={(color) => updateSetting('accentColor', color)}
+                    onChange={(color) => handleSettingChange('accentColor', color)}
                     showPresets={true}
                     showHarmony={true}
                   />
@@ -303,21 +329,21 @@ function AdvancedAppearanceSettings() {
                   <FontFamilySelector
                     label="Heading Font"
                     value="Inter"
-                    onChange={(font) => updateSetting('headingFont', font)}
+                    onChange={(font) => handleSettingChange('headingFont', font)}
                     categories={['sans-serif', 'serif', 'display']}
                   />
 
                   <FontFamilySelector
                     label="Body Font"
                     value="Inter"
-                    onChange={(font) => updateSetting('bodyFont', font)}
+                    onChange={(font) => handleSettingChange('bodyFont', font)}
                     categories={['sans-serif', 'serif']}
                   />
 
                   <FontFamilySelector
                     label="Code Font"
                     value="Fira Code"
-                    onChange={(font) => updateSetting('codeFont', font)}
+                    onChange={(font) => handleSettingChange('codeFont', font)}
                     categories={['monospace']}
                   />
 
@@ -331,7 +357,7 @@ function AdvancedAppearanceSettings() {
                       step={1}
                       unit="px"
                       description="Base font size for body text"
-                      onChange={(size) => updateSetting('baseFontSize', size)}
+                      onChange={(size) => handleSettingChange('baseFontSize', size)}
                     />
 
                     <GranularSlider
@@ -342,7 +368,7 @@ function AdvancedAppearanceSettings() {
                       step={0.1}
                       unit="x"
                       description="Spacing between lines of text"
-                      onChange={(height) => updateSetting('lineHeight', height)}
+                      onChange={(height) => handleSettingChange('lineHeight', height)}
                     />
 
                     <GranularSlider
@@ -353,7 +379,7 @@ function AdvancedAppearanceSettings() {
                       step={0.025}
                       unit="em"
                       description="Spacing between characters"
-                      onChange={(spacing) => updateSetting('letterSpacing', spacing)}
+                      onChange={(spacing) => handleSettingChange('letterSpacing', spacing)}
                     />
 
                     <GranularSlider
@@ -364,7 +390,7 @@ function AdvancedAppearanceSettings() {
                       step={0.05}
                       unit="x"
                       description="Size ratio between heading levels"
-                      onChange={(scale) => updateSetting('headingScale', scale)}
+                      onChange={(scale) => handleSettingChange('headingScale', scale)}
                     />
                   </div>
                 </div>
@@ -393,7 +419,7 @@ function AdvancedAppearanceSettings() {
                       step={2}
                       unit="px"
                       description="Base unit for all spacing calculations"
-                      onChange={(spacing) => updateSetting('baseSpacing', spacing)}
+                      onChange={(spacing) => handleSettingChange('baseSpacing', spacing)}
                     />
 
                     <GranularSlider
@@ -404,7 +430,7 @@ function AdvancedAppearanceSettings() {
                       step={4}
                       unit="px"
                       description="Internal padding for cards and containers"
-                      onChange={(padding) => updateSetting('cardPadding', padding)}
+                      onChange={(padding) => handleSettingChange('cardPadding', padding)}
                     />
 
                     <GranularSlider
@@ -415,7 +441,7 @@ function AdvancedAppearanceSettings() {
                       step={2}
                       unit="px"
                       description="Space between adjacent elements"
-                      onChange={(gap) => updateSetting('elementGap', gap)}
+                      onChange={(gap) => handleSettingChange('elementGap', gap)}
                     />
 
                     <GranularSlider
@@ -426,7 +452,7 @@ function AdvancedAppearanceSettings() {
                       step={8}
                       unit="px"
                       description="Space between major sections"
-                      onChange={(spacing) => updateSetting('sectionSpacing', spacing)}
+                      onChange={(spacing) => handleSettingChange('sectionSpacing', spacing)}
                     />
 
                     <GranularSlider
@@ -437,7 +463,7 @@ function AdvancedAppearanceSettings() {
                       step={2}
                       unit="px"
                       description="Roundness of corners for elements"
-                      onChange={(radius) => updateSetting('borderRadius', radius)}
+                      onChange={(radius) => handleSettingChange('borderRadius', radius)}
                     />
 
                     <GranularSlider
@@ -448,7 +474,7 @@ function AdvancedAppearanceSettings() {
                       step={50}
                       unit="px"
                       description="Maximum width for content containers"
-                      onChange={(width) => updateSetting('maxWidth', width)}
+                      onChange={(width) => handleSettingChange('maxWidth', width)}
                     />
                   </div>
                 </div>
@@ -477,7 +503,7 @@ function AdvancedAppearanceSettings() {
                       step={1}
                       unit=""
                       description="Depth and intensity of drop shadows"
-                      onChange={(intensity) => updateSetting('shadowIntensity', intensity)}
+                      onChange={(intensity) => handleSettingChange('shadowIntensity', intensity)}
                     />
 
                     <GranularSlider
@@ -488,7 +514,7 @@ function AdvancedAppearanceSettings() {
                       step={50}
                       unit="ms"
                       description="Duration of hover and transition effects"
-                      onChange={(speed) => updateSetting('animationSpeed', speed)}
+                      onChange={(speed) => handleSettingChange('animationSpeed', speed)}
                     />
 
                     <GranularSlider
@@ -499,7 +525,7 @@ function AdvancedAppearanceSettings() {
                       step={2}
                       unit="px"
                       description="Background blur for glassmorphism effects"
-                      onChange={(blur) => updateSetting('blurIntensity', blur)}
+                      onChange={(blur) => handleSettingChange('blurIntensity', blur)}
                     />
 
                     <GranularSlider
@@ -510,7 +536,7 @@ function AdvancedAppearanceSettings() {
                       step={5}
                       unit="%"
                       description="Transparency level for overlay elements"
-                      onChange={(opacity) => updateSetting('opacityLevel', opacity)}
+                      onChange={(opacity) => handleSettingChange('opacityLevel', opacity)}
                     />
                   </div>
 
@@ -530,7 +556,7 @@ function AdvancedAppearanceSettings() {
                         <PremiumFeatureLock
                           key={effect.key}
                           feature="advanced_effects"
-                          requiredTier="premium"
+                          requiredTier="plus"
                           showPreview={false}
                         >
                           <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -547,7 +573,7 @@ function AdvancedAppearanceSettings() {
                                 type="checkbox"
                                 className="sr-only peer"
                                 checked={appearance[effect.key] || false}
-                                onChange={(e) => updateSetting(effect.key, e.target.checked)}
+                                onChange={(e) => handleSettingChange(effect.key, e.target.checked)}
                               />
                               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600"></div>
                             </label>
@@ -596,7 +622,7 @@ function AdvancedAppearanceSettings() {
 
                 <PremiumFeatureLock
                   feature="component_theming"
-                  requiredTier="premium"
+                  requiredTier="plus"
                   showPreview={true}
                 >
                   <div className="space-y-6">
@@ -626,6 +652,118 @@ function AdvancedAppearanceSettings() {
                 </PremiumFeatureLock>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Live Preview Section */}
+      {previewMode && (
+        <div className="mt-8 p-6 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Live Preview Mode
+            </h3>
+            <button
+              onClick={() => setPreviewMode(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Your changes are being applied in real-time. You can see how they affect the interface immediately.
+          </p>
+          
+          {/* Sample Preview Content */}
+          <div className="space-y-4">
+            <div className="card p-4">
+              <h4 className="font-semibold mb-2">Sample Job Application</h4>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Software Engineer at Google</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Applied 2 days ago</p>
+                </div>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                  Applied
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button className="btn-primary">Primary Action</button>
+              <button className="btn-secondary">Secondary Action</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tips and Help Section */}
+      <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Tips & Best Practices
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Color Guidelines</h4>
+            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <li>• Ensure sufficient contrast for accessibility (4.5:1 minimum)</li>
+              <li>• Use your primary color sparingly for maximum impact</li>
+              <li>• Test colors in both light and dark themes</li>
+              <li>• Consider color blindness when choosing color schemes</li>
+            </ul>
+          </div>
+          
+          <div>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Typography Tips</h4>
+            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <li>• Limit font families to 2-3 maximum for consistency</li>
+              <li>• Use web-safe fonts for better performance</li>
+              <li>• Maintain proper line height for readability (1.4-1.6)</li>
+              <li>• Consider font loading performance</li>
+            </ul>
+          </div>
+          
+          <div>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Spacing & Layout</h4>
+            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <li>• Use consistent spacing units throughout</li>
+              <li>• Create visual hierarchy with varying spacing</li>
+              <li>• Test on different screen sizes</li>
+              <li>• Allow enough breathing room for content</li>
+            </ul>
+          </div>
+          
+          <div>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Effects & Animation</h4>
+            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <li>• Keep animations subtle and purposeful</li>
+              <li>• Respect user's motion preferences</li>
+              <li>• Use consistent timing across animations</li>
+              <li>• Test performance on slower devices</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Keyboard Shortcuts */}
+      <div className="mt-6 bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+        <h4 className="font-medium text-gray-900 dark:text-white mb-3">Keyboard Shortcuts</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-600 dark:text-gray-400">Save Changes</span>
+            <kbd className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">⌘ + S</kbd>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600 dark:text-gray-400">Toggle Preview</span>
+            <kbd className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">⌘ + P</kbd>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600 dark:text-gray-400">Reset Settings</span>
+            <kbd className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">⌘ + R</kbd>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-// backend/middleware/premiumRequired.js - Premium feature access control
+// backend/middleware/plusRequired.js - Premium feature access control
 
 const logger = require('../utils/logger');
 
@@ -13,35 +13,29 @@ const FEATURE_TIERS = {
   'basic_density': 'free',
   
   // Premium tier features
-  'custom_colors': 'premium',
-  'advanced_typography': 'premium',
-  'granular_spacing': 'premium',
-  'theme_export': 'premium',
-  'google_fonts': 'premium',
-  'unlimited_themes': 'premium',
-  'advanced_effects': 'premium',
+  'custom_colors': 'plus',
+  'advanced_typography': 'plus',
+  'granular_spacing': 'plus',
+  'theme_export': 'plus',
+  'google_fonts': 'plus',
+  'unlimited_themes': 'plus',
+  'advanced_effects': 'plus',
   
   // Enterprise tier features
-  'custom_css': 'enterprise',
-  'component_theming': 'enterprise',
-  'team_sharing': 'enterprise',
-  'font_upload': 'enterprise',
-  'api_access': 'enterprise',
-  'white_labeling': 'enterprise'
+  'custom_css': 'pro',
+  'component_theming': 'pro',
+  'team_sharing': 'pro',
+  'font_upload': 'pro',
+  'api_access': 'pro',
+  'white_labeling': 'pro'
 };
 
-/**
- * Subscription tier hierarchy
- */
 const TIER_LEVELS = {
   'free': 0,
-  'premium': 1,
-  'enterprise': 2
+  'plus': 1,
+  'pro': 2
 };
 
-/**
- * Feature usage limits by tier
- */
 const USAGE_LIMITS = {
   free: {
     customThemes: 1,
@@ -49,41 +43,28 @@ const USAGE_LIMITS = {
     exportPerMonth: 0,
     apiCallsPerDay: 0
   },
-  premium: {
+  plus: {
     customThemes: 25,
     savedColors: 50,
     exportPerMonth: 10,
     apiCallsPerDay: 100
   },
-  enterprise: {
-    customThemes: -1, // unlimited
+  pro: {
+    customThemes: -1, 
     savedColors: -1,
     exportPerMonth: -1,
     apiCallsPerDay: -1
   }
 };
 
-/**
- * Check if user has required subscription tier
- * @param {string} requiredTier - Minimum required tier
- * @param {string} userTier - User's current tier
- */
 const hasRequiredTier = (requiredTier, userTier) => {
   const requiredLevel = TIER_LEVELS[requiredTier] || 0;
   const userLevel = TIER_LEVELS[userTier] || 0;
   return userLevel >= requiredLevel;
 };
 
-/**
- * Get user's current usage for a specific metric
- * @param {string} userId - User ID
- * @param {string} metric - Usage metric to check
- * @param {string} period - Time period ('day', 'month', 'total')
- */
 const getUserUsage = async (userId, metric, period = 'total') => {
-  // This would typically query a usage tracking database
-  // For now, return mock data
-  
+
   const mockUsage = {
     customThemes: 2,
     savedColors: 8,
@@ -94,12 +75,6 @@ const getUserUsage = async (userId, metric, period = 'total') => {
   return mockUsage[metric] || 0;
 };
 
-/**
- * Check if user has reached usage limit
- * @param {Object} user - User object
- * @param {string} feature - Feature being accessed
- * @param {string} metric - Usage metric to check
- */
 const checkUsageLimit = async (user, feature, metric) => {
   const userTier = user.subscriptionTier || 'free';
   const limits = USAGE_LIMITS[userTier];
@@ -110,7 +85,6 @@ const checkUsageLimit = async (user, feature, metric) => {
   
   const limit = limits[metric];
   
-  // -1 means unlimited
   if (limit === -1) {
     return { allowed: true };
   }
@@ -134,16 +108,11 @@ const checkUsageLimit = async (user, feature, metric) => {
   };
 };
 
-/**
- * Middleware to check if user has premium access
- * @param {string} requiredTier - Minimum required subscription tier
- */
-const requirePremium = (requiredTier = 'premium') => {
+const requirePremium = (requiredTier = 'plus') => {
   return async (req, res, next) => {
     try {
-      // Check if user is authenticated
       if (!req.user) {
-        logger.warn('Premium feature access attempted without authentication');
+        logger.warn('Plus feature access attempted without authentication');
         return res.status(401).json({
           success: false,
           error: 'Authentication required',
@@ -153,45 +122,39 @@ const requirePremium = (requiredTier = 'premium') => {
       
       const userTier = req.user.subscriptionTier || 'free';
       
-      // Check if user has required tier
       if (!hasRequiredTier(requiredTier, userTier)) {
-        logger.warn(`Premium feature access denied for user ${req.user._id}: has ${userTier}, needs ${requiredTier}`);
+        logger.warn(`Plus feature access denied for user ${req.user._id}: has ${userTier}, needs ${requiredTier}`);
         
         return res.status(403).json({
           success: false,
           error: `This feature requires ${requiredTier} subscription`,
-          code: 'PREMIUM_REQUIRED',
+          code: 'PLUS_REQUIRED',
           userTier,
           requiredTier,
           upgradeUrl: '/settings/subscription'
         });
       }
       
-      // Attach premium info to request
-      req.premium = {
+      req.plus = {
         tier: userTier,
         hasAccess: true,
         limits: USAGE_LIMITS[userTier]
       };
       
-      logger.info(`Premium feature access granted for user ${req.user._id}: ${userTier} tier`);
+      logger.info(`Plus feature access granted for user ${req.user._id}: ${userTier} tier`);
       next();
       
     } catch (error) {
-      logger.error('Error in premium middleware:', error);
+      logger.error('Error in plus middleware:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to verify premium access',
+        error: 'Failed to verify plus access',
         code: 'PREMIUM_CHECK_FAILED'
       });
     }
   };
 };
 
-/**
- * Middleware to check specific feature access
- * @param {string} feature - Feature identifier
- */
 const requireFeature = (feature) => {
   return async (req, res, next) => {
     try {

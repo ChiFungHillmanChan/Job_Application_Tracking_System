@@ -541,7 +541,7 @@ const AdvancedColorPicker = ({
     <div className={className} ref={pickerRef}>
       <PremiumFeatureLock
         feature="custom_colors"
-        requiredTier="premium"
+        requiredTier="plus"
         showPreview={true}
       >
         <ColorPickerContent />

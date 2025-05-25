@@ -3,6 +3,7 @@ const asyncHandler = require('express-async-handler');
 const logger = require('../utils/logger');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+
 // Plan configurations with pricing
 const SUBSCRIPTION_PLANS = {
   free: {
@@ -15,39 +16,52 @@ const SUBSCRIPTION_PLANS = {
     features: {
       resumes: 5,
       jobApplications: 30,
-      storage: 1, // GB
+      storage: 1,
       support: 'standard'
     }
   },
-  plus: {
+  plus: { 
     id: 'plus',
-    name: 'Plus',
-    monthlyPrice: 888, // in pence (£8.88)
-    annualPrice: 7477, // in pence (£74.77 - 30% discount)
-    stripePriceIdMonthly: process.env.STRIPE_PLUS_MONTHLY_PRICE_ID,
-    stripePriceIdAnnual: process.env.STRIPE_PLUS_ANNUAL_PRICE_ID,
+    name: 'Plus', 
+    monthlyPrice: 888,
+    annualPrice: 7477,
+    stripePriceIdMonthly: process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID, 
+    stripePriceIdAnnual: process.env.STRIPE_PREMIUM_ANNUAL_PRICE_ID,
     features: {
       resumes: Infinity,
       jobApplications: Infinity,
-      storage: 10, // GB
-      support: 'priority'
+      storage: 10,
+      support: 'priority',
+      customColors: true,
+      advancedTypography: true,
+      granularSpacing: true,
+      themeExport: true,
+      googleFonts: true,
+      unlimitedThemes: true,
+      advancedEffects: true
     }
   },
-  pro: {
+  pro: { 
     id: 'pro',
-    name: 'Pro',
-    monthlyPrice: 3888, // in pence (£38.88)
-    annualPrice: 32734, // in pence (£327.34 - 30% discount)
-    stripePriceIdMonthly: process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
-    stripePriceIdAnnual: process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
+    name: 'Pro', 
+    monthlyPrice: 3888,
+    annualPrice: 32734,
+    stripePriceIdMonthly: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID, 
+    stripePriceIdAnnual: process.env.STRIPE_ENTERPRISE_ANNUAL_PRICE_ID, 
     features: {
       resumes: Infinity,
       jobApplications: Infinity,
-      storage: 100, // GB
+      storage: 100,
       support: 'dedicated',
       aiFeatures: true,
       personalConsultation: true,
-      betaAccess: true
+      betaAccess: true,
+      customCSS: true,
+      componentTheming: true,
+      teamSharing: true,
+      fontUpload: true,
+      apiAccess: true,
+      whiteLabeling: true
     }
   }
 };
@@ -228,9 +242,9 @@ const upgradeSubscription = asyncHandler(async (req, res) => {
 
     const user = await User.findById(req.user._id);
     
-    // Update user subscription
+    // FIXED: Direct tier mapping instead of transformation
     const oldTier = user.subscriptionTier;
-    user.subscriptionTier = planId === 'plus' ? 'premium' : planId === 'pro' ? 'enterprise' : 'free';
+    user.subscriptionTier = planId; 
     user.subscriptionStatus = 'active';
     
     if (stripeSubscriptionId) {
@@ -360,25 +374,23 @@ const getUsageStats = asyncHandler(async (req, res) => {
   try {
     const userId = req.user._id;
     
-    // Get current month's job applications count
     const currentMonth = new Date();
     currentMonth.setDate(1);
     currentMonth.setHours(0, 0, 0, 0);
     
     const [resumeCount, jobApplicationsThisMonth, totalJobApplications] = await Promise.all([
-      // Count user's resumes
       require('../models/Resume').countDocuments({ user: userId }),
-      // Count this month's job applications
       require('../models/Job').countDocuments({
         user: userId,
         createdAt: { $gte: currentMonth }
       }),
-      // Count total job applications
       require('../models/Job').countDocuments({ user: userId })
     ]);
 
     const user = await User.findById(userId);
-    const planLimits = SUBSCRIPTION_PLANS[user.subscriptionTier === 'premium' ? 'plus' : user.subscriptionTier === 'enterprise' ? 'pro' : 'free'];
+    
+    // FIXED: Direct tier lookup instead of transformation
+    const planLimits = SUBSCRIPTION_PLANS[user.subscriptionTier] || SUBSCRIPTION_PLANS.free;
 
     res.status(200).json({
       success: true,
@@ -388,7 +400,8 @@ const getUsageStats = asyncHandler(async (req, res) => {
         jobApplicationsThisMonth,
         jobApplicationsLimit: planLimits.features.jobApplications,
         totalJobApplications,
-        planLimits: planLimits.features
+        planLimits: planLimits.features,
+        subscriptionTier: user.subscriptionTier // Include current tier
       }
     });
 
@@ -456,8 +469,8 @@ const handleSuccessfulPayment = async (session) => {
       return;
     }
 
-    // Update user subscription
-    user.subscriptionTier = planId === 'plus' ? 'premium' : planId === 'pro' ? 'enterprise' : 'free';
+    // FIXED: Direct tier mapping
+    user.subscriptionTier = planId; // Keep planId as-is
     user.subscriptionStatus = 'active';
     user.stripeSubscriptionId = session.subscription;
     
@@ -528,6 +541,7 @@ const handlePaymentFailure = async (invoice) => {
   }
 };
 
+
 module.exports = {
   getCurrentSubscription,
   getPlans,
@@ -536,5 +550,6 @@ module.exports = {
   cancelSubscription,
   getBillingHistory,
   getUsageStats,
+  SUBSCRIPTION_PLANS,
   handleStripeWebhook
 };
