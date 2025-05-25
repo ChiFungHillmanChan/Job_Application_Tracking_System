@@ -1,3 +1,5 @@
+// backend/controllers/authController.js - Fixed version with proper preference handling
+
 const User = require('../models/User');
 const asyncHandler = require('express-async-handler');
 const { generateResetPasswordToken, verifyToken } = require('../utils/tokenManager');
@@ -20,7 +22,6 @@ const generateToken = (user) => {
     }
   );
 };
-
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -147,22 +148,70 @@ const loginUser = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Get current logged in user
+// @desc    Get current logged in user with full preferences
 // @route   GET /api/auth/me
 // @access  Private
 const getMe = asyncHandler(async (req, res) => {
-  // User is already available in req.user from the auth middleware
-  res.status(200).json({
-    success: true,
-    user: {
-      id: req.user._id,
-      name: req.user.name,
-      email: req.user.email,
-      subscriptionTier: req.user.subscriptionTier,
-      preferences: req.user.preferences,
-      createdAt: req.user.createdAt
+  try {
+    // Get user with all data
+    const user = await User.findById(req.user._id);
+    
+    if (!user) {
+      logger.error(`User not found in getMe: ${req.user._id}`);
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
     }
-  });
+
+    // Ensure preferences exist with defaults
+    const defaultPreferences = {
+      theme: 'system',
+      notifications: {
+        email: true,
+        push: true,
+      },
+      appearance: {
+        theme: 'system',
+        colorScheme: 'default',
+        density: 'default',
+        fontSize: 'default',
+        statusColors: {
+          'Saved': 'blue',
+          'Applied': 'purple',
+          'Phone Screen': 'yellow',
+          'Interview': 'yellow',
+          'Technical Assessment': 'yellow',
+          'Offer': 'green',
+          'Rejected': 'red',
+          'Withdrawn': 'red',
+        }
+      }
+    };
+
+    const userPreferences = user.preferences || defaultPreferences;
+    
+    logger.info(`Retrieved user profile: ${user.email}`);
+    
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        subscriptionTier: user.subscriptionTier,
+        preferences: userPreferences,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }
+    });
+  } catch (error) {
+    logger.error(`Error in getMe: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve user information'
+    });
+  }
 });
 
 // @desc    Logout user (clear cookie)
@@ -175,6 +224,265 @@ const logoutUser = asyncHandler(async (req, res) => {
     success: true,
     message: 'Logged out successfully'
   });
+});
+
+// @desc    Update user profile with enhanced preferences support
+// @route   PUT /api/auth/updateprofile
+// @access  Private
+const updateProfile = asyncHandler(async (req, res) => {
+  const { name, email, preferences } = req.body;
+  
+  try {
+    // Find user by ID
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      logger.error(`User not found for profile update: ${req.user.id}`);
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    // Update basic fields
+    if (name && name.trim()) {
+      user.name = name.trim();
+    }
+    
+    if (email && email !== user.email) {
+      // Validate email format
+      const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Please provide a valid email address'
+        });
+      }
+      
+      // Check if email is already in use by another user
+      const emailExists = await User.findOne({ email });
+      if (emailExists && emailExists._id.toString() !== req.user.id) {
+        logger.warn(`Profile update attempt with existing email: ${email}`);
+        return res.status(400).json({
+          success: false,
+          error: 'Email already in use'
+        });
+      }
+      user.email = email;
+    }
+    
+    // Update preferences with proper validation and merging
+    if (preferences && typeof preferences === 'object') {
+      // Initialize preferences if they don't exist
+      if (!user.preferences) {
+        user.preferences = {
+          theme: 'system',
+          notifications: {
+            email: true,
+            push: true,
+          }
+        };
+      }
+      
+      // Handle appearance preferences with validation
+      if (preferences.appearance) {
+        const validatedAppearance = validateAppearanceSettings(preferences.appearance);
+        user.preferences.appearance = validatedAppearance;
+        user.preferences.lastModified = preferences.lastModified || Date.now();
+        
+        logger.info(`Appearance preferences updated for user: ${user.email}`, {
+          theme: validatedAppearance.theme,
+          colorScheme: validatedAppearance.colorScheme,
+          density: validatedAppearance.density,
+          fontSize: validatedAppearance.fontSize
+        });
+      }
+      
+      // Handle other preference updates
+      if (preferences.theme && ['light', 'dark', 'system'].includes(preferences.theme)) {
+        user.preferences.theme = preferences.theme;
+      }
+      
+      if (preferences.notifications && typeof preferences.notifications === 'object') {
+        user.preferences.notifications = {
+          ...user.preferences.notifications,
+          ...preferences.notifications
+        };
+      }
+      
+      // Add timestamp for last preference update
+      user.preferences.updatedAt = new Date();
+    }
+    
+    // Save user with validation
+    await user.save();
+    
+    logger.info(`Profile updated successfully for user: ${user.email}`, {
+      updatedFields: {
+        name: !!name,
+        email: !!email,
+        preferences: !!preferences
+      }
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        subscriptionTier: user.subscriptionTier,
+        preferences: user.preferences,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }
+    });
+    
+  } catch (error) {
+    logger.error(`Error saving profile update for user ${req.user.email}:`, error);
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        error: messages.join(', ')
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update profile. Please try again.'
+    });
+  }
+});
+
+// @desc    Get user preferences only
+// @route   GET /api/auth/preferences
+// @access  Private
+const getPreferences = asyncHandler(async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    const defaultPreferences = {
+      theme: 'system',
+      notifications: {
+        email: true,
+        push: true,
+      },
+      appearance: {
+        theme: 'system',
+        colorScheme: 'default',
+        density: 'default',
+        fontSize: 'default',
+        statusColors: {
+          'Saved': 'blue',
+          'Applied': 'purple',
+          'Phone Screen': 'yellow',
+          'Interview': 'yellow',
+          'Technical Assessment': 'yellow',
+          'Offer': 'green',
+          'Rejected': 'red',
+          'Withdrawn': 'red',
+        }
+      }
+    };
+    
+    res.status(200).json({
+      success: true,
+      preferences: user.preferences || defaultPreferences,
+      lastModified: user.preferences?.lastModified || user.updatedAt
+    });
+  } catch (error) {
+    logger.error(`Error getting preferences: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve preferences'
+    });
+  }
+});
+
+// @desc    Update user preferences only
+// @route   PUT /api/auth/preferences
+// @access  Private
+const updatePreferences = asyncHandler(async (req, res) => {
+  const { preferences } = req.body;
+  
+  if (!preferences || typeof preferences !== 'object') {
+    return res.status(400).json({
+      success: false,
+      error: 'Valid preferences object is required'
+    });
+  }
+  
+  try {
+    const user = await User.findById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    // Initialize preferences if they don't exist
+    if (!user.preferences) {
+      user.preferences = {
+        theme: 'system',
+        notifications: {
+          email: true,
+          push: true,
+        }
+      };
+    }
+    
+    // Update preferences with validation
+    if (preferences.appearance) {
+      const validatedAppearance = validateAppearanceSettings(preferences.appearance);
+      user.preferences.appearance = validatedAppearance;
+    }
+    
+    if (preferences.theme && ['light', 'dark', 'system'].includes(preferences.theme)) {
+      user.preferences.theme = preferences.theme;
+    }
+    
+    if (preferences.notifications && typeof preferences.notifications === 'object') {
+      user.preferences.notifications = {
+        ...user.preferences.notifications,
+        ...preferences.notifications
+      };
+    }
+    
+    // Add timestamps
+    user.preferences.lastModified = Date.now();
+    user.preferences.updatedAt = new Date();
+    
+    await user.save();
+    
+    logger.info(`Preferences updated for user: ${user.email}`);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Preferences updated successfully',
+      preferences: user.preferences,
+      lastModified: user.preferences.lastModified
+    });
+    
+  } catch (error) {
+    logger.error(`Error updating preferences for user ${req.user.email}:`, error);
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update preferences. Please try again.'
+    });
+  }
 });
 
 // @desc    Forgot password
@@ -213,16 +521,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
         data: 'If an account with that email exists, we have sent a password reset link.'
       });
     }
-
-    // Check if user recently requested a password reset (rate limiting)
-    // if (user.resetPasswordExpire && user.resetPasswordExpire > Date.now()) {
-    //   const timeLeft = Math.ceil((user.resetPasswordExpire - Date.now()) / 1000 / 60); // minutes
-    //   logger.warn(`Password reset rate limit hit for email: ${email}, ${timeLeft} minutes remaining`);
-    //   return res.status(429).json({
-    //     success: false,
-    //     error: `Please wait ${timeLeft} minutes before requesting another password reset`
-    //   });
-    // }
 
     // Get reset token
     const { resetToken, resetPasswordToken, resetPasswordExpire } = generateResetPasswordToken();
@@ -446,64 +744,6 @@ const resetPassword = asyncHandler(async (req, res) => {
   }
 });
 
-
-// @desc    Update user profile
-// @route   PUT /api/auth/updateprofile
-// @access  Private
-const updateProfile = asyncHandler(async (req, res) => {
-  const { name, email } = req.body;
-  
-  // Find user by ID
-  const user = await User.findById(req.user.id);
-  
-  if (!user) {
-    logger.error(`User not found for profile update: ${req.user.id}`);
-    return res.status(404).json({
-      success: false,
-      error: 'User not found'
-    });
-  }
-  
-  // Update fields
-  if (name) user.name = name;
-  if (email && email !== user.email) {
-    // Check if email is already in use by another user
-    const emailExists = await User.findOne({ email });
-    if (emailExists && emailExists._id.toString() !== req.user.id) {
-      logger.warn(`Profile update attempt with existing email: ${email}`);
-      return res.status(400).json({
-        success: false,
-        error: 'Email already in use'
-      });
-    }
-    user.email = email;
-  }
-
-  if (preferences && preferences.appearance) {
-    user.preferences = {
-      ...user.preferences,
-      appearance: preferences.appearance
-    };
-  }
-  
-  // Save user
-  await user.save();
-  
-  logger.info(`Profile updated for user: ${user.email}`);
-  
-  res.status(200).json({
-    success: true,
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      subscriptionTier: user.subscriptionTier,
-      preferences: user.preferences,
-      createdAt: user.createdAt
-    }
-  });
-});
-
 // @desc    Change user password
 // @route   PUT /api/auth/password
 // @access  Private
@@ -570,6 +810,51 @@ const changePassword = asyncHandler(async (req, res) => {
   });
 });
 
+// Helper function to validate appearance settings
+const validateAppearanceSettings = (appearance) => {
+  const validThemes = ['light', 'dark', 'system'];
+  const validColorSchemes = ['default', 'green', 'purple', 'red', 'orange'];
+  const validDensities = ['compact', 'default', 'comfortable'];
+  const validFontSizes = ['small', 'default', 'large'];
+  
+  const validated = {
+    theme: validThemes.includes(appearance.theme) ? appearance.theme : 'system',
+    colorScheme: validColorSchemes.includes(appearance.colorScheme) ? appearance.colorScheme : 'default',
+    density: validDensities.includes(appearance.density) ? appearance.density : 'default',
+    fontSize: validFontSizes.includes(appearance.fontSize) ? appearance.fontSize : 'default',
+    statusColors: {},
+    lastModified: appearance.lastModified || Date.now()
+  };
+  
+  // Validate status colors
+  if (appearance.statusColors && typeof appearance.statusColors === 'object') {
+    const validColors = ['blue', 'green', 'yellow', 'red', 'purple', 'pink', 'indigo', 'gray', 'orange', 'teal'];
+    const validStatuses = ['Saved', 'Applied', 'Phone Screen', 'Interview', 'Technical Assessment', 'Offer', 'Rejected', 'Withdrawn'];
+    
+    for (const [status, color] of Object.entries(appearance.statusColors)) {
+      if (validStatuses.includes(status) && validColors.includes(color)) {
+        validated.statusColors[status] = color;
+      }
+    }
+  }
+  
+  // Set default status colors if none provided
+  if (Object.keys(validated.statusColors).length === 0) {
+    validated.statusColors = {
+      'Saved': 'blue',
+      'Applied': 'purple',
+      'Phone Screen': 'yellow',
+      'Interview': 'yellow',
+      'Technical Assessment': 'yellow',
+      'Offer': 'green',
+      'Rejected': 'red',
+      'Withdrawn': 'red',
+    };
+  }
+  
+  return validated;
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -578,5 +863,7 @@ module.exports = {
   forgotPassword,
   resetPassword,
   updateProfile,
-  changePassword
+  changePassword,
+  getPreferences,
+  updatePreferences,
 };

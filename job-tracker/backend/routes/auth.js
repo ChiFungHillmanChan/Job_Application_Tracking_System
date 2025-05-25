@@ -7,7 +7,9 @@ const {
   forgotPassword,
   resetPassword,
   updateProfile,
-  changePassword  
+  changePassword,
+  getPreferences,
+  updatePreferences 
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
@@ -24,5 +26,9 @@ router.get('/me', protect, getMe);
 router.get('/logout', protect, logoutUser);
 router.put('/updateprofile', protect, updateProfile);
 router.put('/password', protect, changePassword);  
+
+// New preference routes for hybrid system
+router.get('/preferences', protect, getPreferences);
+router.put('/preferences', protect, updatePreferences);
 
 module.exports = router;

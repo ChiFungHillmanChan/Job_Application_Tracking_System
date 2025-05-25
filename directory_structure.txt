@@ -10,14 +10,17 @@
 │   │   │   ├── authController.js
 │   │   │   ├── jobController.js
 │   │   │   ├── resumeController.js
-│   │   │   └── subscriptionController.js
+│   │   │   ├── subscriptionController.js
+│   │   │   └── themeController.js
 │   │   ├── logs
 │   │   │   ├── combined.log
 │   │   │   └── error.log
 │   │   ├── middleware
 │   │   │   ├── auth.js
-│   │   │   └── error.js
+│   │   │   ├── error.js
+│   │   │   └── premiumRequired.js
 │   │   ├── models
+│   │   │   ├── CustomTheme.js
 │   │   │   ├── Job.js
 │   │   │   ├── Resume.js
 │   │   │   └── User.js
@@ -28,7 +31,8 @@
 │   │   │   ├── auth.js
 │   │   │   ├── jobs.js
 │   │   │   ├── resumes.js
-│   │   │   └── subscription.js
+│   │   │   ├── subscription.js
+│   │   │   └── theme.js
 │   │   ├── scripts
 │   │   │   ├── createSuperUser.js
 │   │   │   └── migrateResumes.js
@@ -46,6 +50,7 @@
 │   │   └── utils
 │   │       ├── logger.js
 │   │       ├── sendEmail.js
+│   │       ├── subscriptionChecker.js
 │   │       └── tokenManager.js
 │   ├── eslint.config.mjs
 │   ├── jsconfig.json
@@ -113,7 +118,11 @@
 │   │   │       ├── account
 │   │   │       │   └── page.jsx
 │   │   │       ├── appearance
-│   │   │       │   └── page.jsx
+│   │   │       │   ├── advanced
+│   │   │       │   │   └── page.jsx
+│   │   │       │   ├── page.jsx
+│   │   │       │   └── themes
+│   │   │       │       └── page.jsx
 │   │   │       ├── page.jsx
 │   │   │       ├── profile
 │   │   │       │   └── page.jsx
@@ -140,16 +149,28 @@
 │   │   │       ├── Card.jsx
 │   │   │       ├── ColorPicker.jsx
 │   │   │       ├── Input.jsx
+│   │   │       ├── premium
+│   │   │       │   ├── AdvancedColorPicker.jsx
+│   │   │       │   ├── CustomCSSEditor.jsx
+│   │   │       │   ├── FontFamilySelector.jsx
+│   │   │       │   ├── GranularSlider.jsx
+│   │   │       │   └── PremiumFeatureLock.jsx
 │   │   │       └── Select.jsx
+│   │   ├── contexts
+│   │   │   └── AppearanceContext.js
 │   │   ├── lib
 │   │   │   ├── api.js
-│   │   │   ├── appearaceUtils.js
+│   │   │   ├── appearanceUtils.js
 │   │   │   ├── authDebug.js
+│   │   │   ├── fontLibrary.js
 │   │   │   ├── hooks
-│   │   │   │   └── useAuth.js
+│   │   │   │   ├── useAuth.js
+│   │   │   │   └── useTheme.js
 │   │   │   ├── jobService.js
+│   │   │   ├── premiumTheme.js
 │   │   │   ├── resumeService.js
 │   │   │   ├── subscriptionService.js
+│   │   │   ├── themeUtils.js
 │   │   │   ├── utils
 │   │   │   └── withAuth.js
 │   │   └── styles
@@ -157,4 +178,4 @@
 │   └── tailwind.config.js
 └── README.md
 
-53 directories, 105 files
+57 directories, 122 files

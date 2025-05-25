@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import withAuth from '@/lib/withAuth';
 import Link from 'next/link';
 import { useTheme } from '@/lib/hooks/useTheme';
-import ColorPicker from '@/components/ui/ColorPicker';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 function AppearanceSettings() {
   const { 
@@ -13,32 +13,69 @@ function AppearanceSettings() {
     updateStatusColor, 
     resetToDefaults, 
     saveToProfile,
-    getStatusColor 
+    syncFromProfile,
+    forceSyncToProfile,
+    getStatusColor,
+    loading,
+    saveMode,
+    lastSynced,
+    hasUnsavedChanges,
+    autoSaveEnabled,
+    setAutoSaveEnabled
   } = useTheme();
   
-  const [settingsSuccess, setSettingsSuccess] = useState('');
-  const [saving, setSaving] = useState(false);
+  const { isAuthenticated, user } = useAuth();
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [actionLoading, setActionLoading] = useState(false);
   
-  const handleSavePreferences = async () => {
-    setSaving(true);
+  const showMessage = (type, text) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage({ type: '', text: '' }), 4000);
+  };
+
+  const handleManualSave = async () => {
+    setActionLoading(true);
     try {
       const result = await saveToProfile();
-      setSettingsSuccess(result.message);
-      
-      setTimeout(() => {
-        setSettingsSuccess('');
-      }, 3000);
+      showMessage(result.success ? 'success' : 'error', result.message);
     } catch (error) {
-      setSettingsSuccess('Failed to save preferences');
+      showMessage('error', 'Failed to save settings');
     } finally {
-      setSaving(false);
+      setActionLoading(false);
     }
   };
 
-  const handleResetToDefaults = () => {
-    resetToDefaults();
-    setSettingsSuccess('Settings reset to defaults');
-    setTimeout(() => setSettingsSuccess(''), 3000);
+  const handleSyncFromAccount = async () => {
+    setActionLoading(true);
+    try {
+      const result = await syncFromProfile();
+      showMessage(result.success ? 'success' : 'error', result.message);
+    } catch (error) {
+      showMessage('error', 'Failed to sync from account');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResetToDefaults = async () => {
+    if (window.confirm('Are you sure you want to reset all appearance settings to defaults?')) {
+      await resetToDefaults();
+      showMessage('success', 'Settings reset to defaults');
+    }
+  };
+
+  const handleForcePush = async () => {
+    if (window.confirm('This will overwrite your account settings with current local settings. Continue?')) {
+      setActionLoading(true);
+      try {
+        const result = await forceSyncToProfile();
+        showMessage(result.success ? 'success' : 'error', result.message);
+      } catch (error) {
+        showMessage('error', 'Failed to push settings to account');
+      } finally {
+        setActionLoading(false);
+      }
+    }
   };
 
   const statusColorOptions = [
@@ -53,6 +90,41 @@ function AppearanceSettings() {
     { name: 'Orange', value: 'orange' },
     { name: 'Teal', value: 'teal' },
   ];
+
+  const getSaveModeInfo = () => {
+    switch (saveMode) {
+      case 'device':
+        return {
+          icon: '📱',
+          title: 'Device Only',
+          description: 'Settings saved locally on this device',
+          color: 'text-blue-600 dark:text-blue-400'
+        };
+      case 'account':
+        return {
+          icon: '☁️',
+          title: 'Account Sync',
+          description: 'Settings synced to your account',
+          color: 'text-green-600 dark:text-green-400'
+        };
+      case 'hybrid':
+        return {
+          icon: '🔄',
+          title: 'Hybrid Mode',
+          description: 'Settings saved locally and synced to account',
+          color: 'text-purple-600 dark:text-purple-400'
+        };
+      default:
+        return {
+          icon: '❓',
+          title: 'Unknown',
+          description: 'Unknown save mode',
+          color: 'text-gray-600 dark:text-gray-400'
+        };
+    }
+  };
+
+  const saveModeInfo = getSaveModeInfo();
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -84,11 +156,106 @@ function AppearanceSettings() {
         </p>
       </header>
 
-      {settingsSuccess && (
-        <div className="mb-6 p-3 bg-green-100 text-green-700 rounded-md text-sm dark:bg-green-900 dark:text-green-300 animate-fade-in">
-          {settingsSuccess}
+      {/* Status Messages */}
+      {message.text && (
+        <div className={`mb-6 p-3 rounded-md text-sm animate-fade-in ${
+          message.type === 'success' 
+            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+            : message.type === 'error'
+            ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+            : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+        }`}>
+          {message.text}
         </div>
       )}
+
+      {/* Sync Status Card */}
+      <div className="card mb-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <span className="text-2xl">{saveModeInfo.icon}</span>
+            <div>
+              <h3 className={`font-medium ${saveModeInfo.color}`}>
+                {saveModeInfo.title}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {saveModeInfo.description}
+              </p>
+              {lastSynced && (
+                <p className="text-xs text-gray-500 dark:text-gray-500">
+                  Last synced: {new Date(lastSynced).toLocaleString()}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {hasUnsavedChanges && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
+                <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full mr-1 animate-pulse"></span>
+                Unsaved
+              </span>
+            )}
+            
+            {isAuthenticated() && (
+              <div className="flex items-center space-x-2">
+                <label className="flex items-center text-sm">
+                  <input
+                    type="checkbox"
+                    checked={autoSaveEnabled}
+                    onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+                    className="mr-2 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  Auto-sync
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Sync Actions */}
+        {isAuthenticated() && (
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleManualSave}
+                disabled={actionLoading}
+                className="btn-primary text-sm"
+              >
+                {actionLoading ? 'Saving...' : 'Save to Account'}
+              </button>
+              
+              <button
+                onClick={handleSyncFromAccount}
+                disabled={actionLoading}
+                className="btn-secondary text-sm"
+              >
+                {actionLoading ? 'Syncing...' : 'Sync from Account'}
+              </button>
+              
+              {hasUnsavedChanges && (
+                <button
+                  onClick={handleForcePush}
+                  disabled={actionLoading}
+                  className="px-3 py-1 text-sm border border-orange-300 text-orange-700 rounded-md hover:bg-orange-50 dark:border-orange-600 dark:text-orange-400 dark:hover:bg-orange-900 transition-colors duration-200"
+                >
+                  Force Push Local
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {!isAuthenticated() && (
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              <Link href="/auth/login" className="text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                Log in
+              </Link> to sync your appearance settings across devices
+            </p>
+          </div>
+        )}
+      </div>
 
       <div className="space-y-8">
         {/* Theme Preferences */}
@@ -287,7 +454,7 @@ function AppearanceSettings() {
                     <select
                       value={color}
                       onChange={(e) => updateStatusColor(status, e.target.value)}
-                      className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200"
                     >
                       {statusColorOptions.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -301,35 +468,87 @@ function AppearanceSettings() {
             </div>
           </div>
         </div>
+
+        {/* Sample Preview */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Live Preview</h3>
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              See how your settings look with sample job applications
+            </p>
+            
+            {[
+              { company: 'Google', position: 'Software Engineer', status: 'Applied', date: '2 days ago' },
+              { company: 'Microsoft', position: 'Product Manager', status: 'Interview', date: '1 week ago' },
+              { company: 'Apple', position: 'UX Designer', status: 'Offer', date: '3 days ago' },
+              { company: 'Meta', position: 'Data Scientist', status: 'Rejected', date: '1 month ago' },
+              { company: 'Amazon', position: 'DevOps Engineer', status: 'Saved', date: 'Just now' }
+            ].map((job, index) => {
+              const statusColor = getStatusColor(job.status);
+              return (
+                <div key={index} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-200">
+                  <div className="flex-1">
+                    <h4 className={`font-medium text-gray-900 dark:text-white ${
+                      appearance.fontSize === 'small' ? 'text-sm' : appearance.fontSize === 'large' ? 'text-lg' : 'text-base'
+                    }`}>
+                      {job.position}
+                    </h4>
+                    <p className={`text-gray-600 dark:text-gray-400 ${
+                      appearance.fontSize === 'small' ? 'text-xs' : appearance.fontSize === 'large' ? 'text-base' : 'text-sm'
+                    }`}>
+                      {job.company} • {job.date}
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors duration-200 ${statusColor.bg} ${statusColor.text} ${statusColor.darkBg} ${statusColor.darkText}`}>
+                    {job.status}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
         
         {/* Action Buttons */}
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center pt-6 border-t border-gray-200 dark:border-gray-700">
           <button
             type="button"
             onClick={handleResetToDefaults}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors duration-200"
+            disabled={loading || actionLoading}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
           >
             Reset to Defaults
           </button>
           
-          <button
-            type="button"
-            onClick={handleSavePreferences}
-            disabled={saving}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-          >
-            {saving ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Saving...
-              </>
-            ) : (
-              'Save Preferences'
+          <div className="flex items-center space-x-3">
+            {hasUnsavedChanges && !autoSaveEnabled && (
+              <span className="text-sm text-yellow-600 dark:text-yellow-400">
+                You have unsaved changes
+              </span>
             )}
-          </button>
+            
+            {isAuthenticated() && (
+              <button
+                type="button"
+                onClick={handleManualSave}
+                disabled={loading || actionLoading}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              >
+                {actionLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  'Save to Account'
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
