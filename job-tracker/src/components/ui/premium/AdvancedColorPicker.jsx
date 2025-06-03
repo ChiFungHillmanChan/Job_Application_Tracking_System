@@ -15,13 +15,11 @@ const AdvancedColorPicker = ({
   const [hsl, setHsl] = useState({ h: 0, s: 0, l: 0 });
   const [rgb, setRgb] = useState({ r: 0, g: 0, b: 0 });
   const [isOpen, setIsOpen] = useState(false);
-  const [inputMode, setInputMode] = useState('hsl'); // 'hsl', 'rgb', 'hex'
+  const [inputMode, setInputMode] = useState('hsl');
   const [savedColors, setSavedColors] = useState([]);
   const [harmonyType, setHarmonyType] = useState('complementary');
   
   const pickerRef = useRef(null);
-  const hueRef = useRef(null);
-  const saturationRef = useRef(null);
 
   // Convert hex to HSL
   const hexToHsl = useCallback((hex) => {
@@ -145,7 +143,7 @@ const AdvancedColorPicker = ({
     }
   }, [value, color, hexToHsl, hexToRgb]);
 
-  // Handle color change
+  // FIXED: Simplified color change handler
   const handleColorChange = useCallback((newColor) => {
     setColor(newColor);
     const newHsl = hexToHsl(newColor);
@@ -203,31 +201,33 @@ const AdvancedColorPicker = ({
   };
 
   const ColorPickerContent = () => (
-    <div className="space-y-4">
-      {/* Color display */}
-      <div className="relative">
+    <div className={`space-y-4 ${className}`} ref={pickerRef}>
+      {/* Label and current selection */}
+      <div>
+        {label && (
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            {label}
+          </label>
+        )}
+        
+        {/* Color display button */}
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full h-12 rounded-lg border-2 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200"
+          className="w-full h-12 rounded-lg border-2 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 overflow-hidden"
           style={{ backgroundColor: color }}
         >
           <span 
-            className={`block w-full h-full rounded-lg flex items-center justify-center font-medium ${
+            className={`block w-full h-full flex items-center justify-center font-medium transition-all duration-200 ${
               getContrastRatio(color) === 'light' ? 'text-white' : 'text-gray-900'
             }`}
           >
             {color.toUpperCase()}
           </span>
         </button>
-        
-        {label && (
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {label}
-          </label>
-        )}
       </div>
 
+      {/* FIXED: Simplified dropdown without complex interaction tracking */}
       {isOpen && (
         <div className="space-y-4 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg animate-fade-in">
           {/* Color wheel area */}
@@ -239,7 +239,6 @@ const AdvancedColorPicker = ({
               </label>
               <div className="relative h-4 rounded-lg overflow-hidden bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-cyan-500 via-blue-500 via-purple-500 to-red-500">
                 <input
-                  ref={hueRef}
                   type="range"
                   min="0"
                   max="360"
@@ -538,15 +537,13 @@ const AdvancedColorPicker = ({
   );
 
   return (
-    <div className={className} ref={pickerRef}>
-      <PremiumFeatureLock
-        feature="custom_colors"
-        requiredTier="plus"
-        showPreview={true}
-      >
-        <ColorPickerContent />
-      </PremiumFeatureLock>
-    </div>
+    <PremiumFeatureLock
+      feature="custom_colors"
+      requiredTier="plus"
+      showPreview={true}
+    >
+      <ColorPickerContent />
+    </PremiumFeatureLock>
   );
 };
 

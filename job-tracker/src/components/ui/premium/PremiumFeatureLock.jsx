@@ -15,10 +15,9 @@ const PremiumFeatureLock = ({
   const { user, isAuthenticated } = useAuth();
   const [showUpgrade, setShowUpgrade] = useState(false);
 
-  // Check if user has required subscription tier
+  // FIXED: Removed all console.log statements for cleaner performance
   const hasAccess = () => {
     if (!isAuthenticated() || !user) {
-      console.log('🔒 Access denied: User not authenticated');
       return false;
     }
     
@@ -28,15 +27,10 @@ const PremiumFeatureLock = ({
       'pro': 2
     };
     
-    const userLevel = tierLevels[user.subscriptionTier] ;
+    const userLevel = tierLevels[user.subscriptionTier] || 0;
     const requiredLevel = tierLevels[requiredTier] || 1;
     
-    console.log(`🔍 Access check: User tier "${user.subscriptionTier}" (level ${userLevel}) vs required "${requiredTier}" (level ${requiredLevel})`);
-    
-    const hasPermission = userLevel >= requiredLevel;
-    console.log(`${hasPermission ? '✅' : '❌'} Access ${hasPermission ? 'granted' : 'denied'}`);
-    
-    return hasPermission;
+    return userLevel >= requiredLevel;
   };
 
   const getFeatureDescription = (feature) => {

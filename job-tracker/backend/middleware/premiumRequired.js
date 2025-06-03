@@ -1,18 +1,12 @@
-// backend/middleware/plusRequired.js - Premium feature access control
-
 const logger = require('../utils/logger');
 
-/**
- * Premium feature access levels
- */
+
 const FEATURE_TIERS = {
-  // Free tier features
   'basic_themes': 'free',
   'basic_colors': 'free',
   'basic_fonts': 'free',
   'basic_density': 'free',
   
-  // Premium tier features
   'custom_colors': 'plus',
   'advanced_typography': 'plus',
   'granular_spacing': 'plus',
@@ -21,7 +15,6 @@ const FEATURE_TIERS = {
   'unlimited_themes': 'plus',
   'advanced_effects': 'plus',
   
-  // Enterprise tier features
   'custom_css': 'pro',
   'component_theming': 'pro',
   'team_sharing': 'pro',
@@ -149,7 +142,7 @@ const requirePremium = (requiredTier = 'plus') => {
       res.status(500).json({
         success: false,
         error: 'Failed to verify plus access',
-        code: 'PREMIUM_CHECK_FAILED'
+        code: 'PLUS_CHECK_FAILED'
       });
     }
   };
@@ -210,11 +203,6 @@ const requireFeature = (feature) => {
   };
 };
 
-/**
- * Middleware to check usage limits
- * @param {string} metric - Usage metric to check
- * @param {string} period - Time period for the limit
- */
 const checkUsage = (metric, period = 'total') => {
   return async (req, res, next) => {
     try {
@@ -262,11 +250,6 @@ const checkUsage = (metric, period = 'total') => {
   };
 };
 
-/**
- * Get feature availability for user
- * @param {Object} user - User object
- * @returns {Object} Feature availability map
- */
 const getFeatureAvailability = (user) => {
   const userTier = user?.subscriptionTier || 'free';
   const availability = {};
@@ -282,11 +265,6 @@ const getFeatureAvailability = (user) => {
   return availability;
 };
 
-/**
- * Get usage summary for user
- * @param {Object} user - User object
- * @returns {Object} Usage summary
- */
 const getUsageSummary = async (user) => {
   const userTier = user?.subscriptionTier || 'free';
   const limits = USAGE_LIMITS[userTier];
@@ -306,17 +284,11 @@ const getUsageSummary = async (user) => {
   return summary;
 };
 
-/**
- * Increment usage counter
- * @param {string} userId - User ID
- * @param {string} metric - Usage metric
- * @param {number} amount - Amount to increment
- */
+
 const incrementUsage = async (userId, metric, amount = 1) => {
   // This would typically update a usage tracking database
   logger.info(`Usage incremented for user ${userId}: ${metric} +${amount}`);
   
-  // In a real implementation, you would:
   // 1. Update usage in database
   // 2. Check if user is approaching limits
   // 3. Send notifications if needed
@@ -325,31 +297,19 @@ const incrementUsage = async (userId, metric, amount = 1) => {
   return { success: true, metric, amount };
 };
 
-/**
- * Reset usage counters (typically run on a schedule)
- * @param {string} period - Period to reset ('daily', 'monthly')
- */
+
 const resetUsageCounters = async (period = 'monthly') => {
   logger.info(`Resetting ${period} usage counters`);
-  
-  // This would typically reset usage counters in the database
-  // based on the period (daily for API calls, monthly for exports, etc.)
   
   return { success: true, period, resetAt: new Date() };
 };
 
-/**
- * Middleware to track feature usage
- * @param {string} feature - Feature being used
- * @param {string} metric - Usage metric to increment
- */
+
 const trackUsage = (feature, metric) => {
   return async (req, res, next) => {
     try {
-      // Call next first to process the request
       next();
       
-      // Track usage after successful request
       if (req.user && res.statusCode < 400) {
         await incrementUsage(req.user._id, metric);
         logger.info(`Feature usage tracked: ${feature} for user ${req.user._id}`);
@@ -357,7 +317,6 @@ const trackUsage = (feature, metric) => {
       
     } catch (error) {
       logger.error('Error tracking usage:', error);
-      // Don't fail the request if usage tracking fails
     }
   };
 };

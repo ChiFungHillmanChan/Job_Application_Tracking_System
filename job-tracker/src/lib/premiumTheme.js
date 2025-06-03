@@ -1,8 +1,3 @@
-// src/lib/premiumThemes.js - Premium theme templates and management
-
-/**
- * Premium theme templates with complete styling configurations
- */
 export const PREMIUM_THEME_TEMPLATES = {
   'ocean-breeze': {
     id: 'ocean-breeze',
@@ -320,9 +315,6 @@ export const PREMIUM_THEME_TEMPLATES = {
   }
 };
 
-/**
- * Theme categories for organization
- */
 export const THEME_CATEGORIES = {
   all: { name: 'All Themes', icon: '🎨' },
   professional: { name: 'Professional', icon: '💼' },
@@ -333,9 +325,6 @@ export const THEME_CATEGORIES = {
   trending: { name: 'Trending', icon: '🔥' }
 };
 
-/**
- * Premium theme management class
- */
 export class PremiumThemeManager {
   constructor() {
     this.customThemes = new Map();
@@ -368,18 +357,10 @@ export class PremiumThemeManager {
     return themes.sort((a, b) => b.rating - a.rating);
   }
 
-  /**
-   * Get theme by ID
-   * @param {string} themeId - Theme identifier
-   */
   getTheme(themeId) {
     return PREMIUM_THEME_TEMPLATES[themeId] || this.customThemes.get(themeId);
   }
 
-  /**
-   * Create custom theme
-   * @param {Object} themeData - Theme configuration
-   */
   createCustomTheme(themeData) {
     const customTheme = {
       id: `custom-${Date.now()}`,
@@ -403,10 +384,6 @@ export class PremiumThemeManager {
     return customTheme;
   }
 
-  /**
-   * Export theme configuration
-   * @param {string} themeId - Theme identifier
-   */
   exportTheme(themeId) {
     const theme = this.getTheme(themeId);
     if (!theme) return null;
@@ -423,10 +400,6 @@ export class PremiumThemeManager {
     return JSON.stringify(exportData, null, 2);
   }
 
-  /**
-   * Import theme from JSON
-   * @param {string} themeJson - JSON theme data
-   */
   importTheme(themeJson) {
     try {
       const themeData = JSON.parse(themeJson);
@@ -445,10 +418,6 @@ export class PremiumThemeManager {
     }
   }
 
-  /**
-   * Apply theme to application
-   * @param {string} themeId - Theme identifier
-   */
   applyTheme(themeId) {
     const theme = this.getTheme(themeId);
     if (!theme) return false;
@@ -482,10 +451,6 @@ export class PremiumThemeManager {
     return true;
   }
 
-  /**
-   * Apply custom colors to CSS variables
-   * @param {Object} colors - Color palette object
-   */
   applyCustomColors(colors) {
     const root = document.documentElement;
     
@@ -494,10 +459,6 @@ export class PremiumThemeManager {
     });
   }
 
-  /**
-   * Apply typography settings
-   * @param {Object} typography - Typography configuration
-   */
   applyTypography(typography) {
     const root = document.documentElement;
     
@@ -518,10 +479,6 @@ export class PremiumThemeManager {
     }
   }
 
-  /**
-   * Apply visual effects
-   * @param {Object} effects - Effects configuration
-   */
   applyEffects(effects) {
     const root = document.documentElement;
     
@@ -543,7 +500,6 @@ export class PremiumThemeManager {
       root.style.setProperty('--animation-speed', effects.animationSpeed);
     }
     
-    // Apply effect classes
     const body = document.body;
     const effectClasses = ['glass-effect', 'gradient-accents', 'clean-lines'];
     effectClasses.forEach(className => body.classList.remove(className));
@@ -553,10 +509,6 @@ export class PremiumThemeManager {
     if (effects.cleanLines) body.classList.add('clean-lines');
   }
 
-  /**
-   * Toggle favorite theme
-   * @param {string} themeId - Theme identifier
-   */
   toggleFavorite(themeId) {
     if (this.favoriteThemes.has(themeId)) {
       this.favoriteThemes.delete(themeId);
@@ -567,38 +519,24 @@ export class PremiumThemeManager {
     }
   }
 
-  /**
-   * Get favorite themes
-   */
   getFavoriteThemes() {
     return Array.from(this.favoriteThemes)
       .map(id => this.getTheme(id))
       .filter(Boolean);
   }
 
-  /**
-   * Add theme to recent list
-   * @param {string} themeId - Theme identifier
-   */
   addToRecent(themeId) {
     this.recentThemes = this.recentThemes.filter(id => id !== themeId);
     this.recentThemes.unshift(themeId);
     this.recentThemes = this.recentThemes.slice(0, 10);
   }
 
-  /**
-   * Get recent themes
-   */
   getRecentThemes() {
     return this.recentThemes
       .map(id => this.getTheme(id))
       .filter(Boolean);
   }
 
-  /**
-   * Search themes
-   * @param {string} query - Search query
-   */
   searchThemes(query) {
     const allThemes = [
       ...Object.values(PREMIUM_THEME_TEMPLATES),
@@ -615,11 +553,6 @@ export class PremiumThemeManager {
     });
   }
 
-  /**
-   * Get theme compatibility score
-   * @param {string} themeId - Theme identifier
-   * @param {Object} userPreferences - User's current preferences
-   */
   getCompatibilityScore(themeId, userPreferences) {
     const theme = this.getTheme(themeId);
     if (!theme) return 0;
@@ -627,7 +560,6 @@ export class PremiumThemeManager {
     let score = 0;
     let maxScore = 0;
     
-    // Check theme mode compatibility
     maxScore += 20;
     if (theme.config.theme === userPreferences.theme) {
       score += 20;
@@ -635,25 +567,21 @@ export class PremiumThemeManager {
       score += 10;
     }
     
-    // Check density compatibility
     maxScore += 15;
     if (theme.config.density === userPreferences.density) {
       score += 15;
     }
     
-    // Check font size compatibility
     maxScore += 10;
     if (theme.config.fontSize === userPreferences.fontSize) {
       score += 10;
     }
     
-    // Check color scheme compatibility
     maxScore += 25;
     if (theme.config.colorScheme === userPreferences.colorScheme) {
       score += 25;
     }
     
-    // Check status colors compatibility
     maxScore += 30;
     if (theme.config.statusColors && userPreferences.statusColors) {
       const matchingColors = Object.keys(theme.config.statusColors).filter(
@@ -665,11 +593,6 @@ export class PremiumThemeManager {
     return Math.round((score / maxScore) * 100);
   }
 
-  /**
-   * Get theme recommendations
-   * @param {Object} userPreferences - User's current preferences
-   * @param {number} limit - Maximum number of recommendations
-   */
   getRecommendations(userPreferences, limit = 5) {
     const allThemes = Object.values(PREMIUM_THEME_TEMPLATES);
     
@@ -688,15 +611,10 @@ export class PremiumThemeManager {
       .slice(0, limit);
   }
 
-  /**
-   * Validate theme configuration
-   * @param {Object} config - Theme configuration to validate
-   */
   validateThemeConfig(config) {
     const errors = [];
     const warnings = [];
     
-    // Required fields
     if (!config.theme) {
       errors.push('Theme mode (light/dark) is required');
     }
@@ -705,7 +623,6 @@ export class PremiumThemeManager {
       errors.push('Color scheme is required');
     }
     
-    // Validate custom colors if present
     if (config.customColors?.primary) {
       const requiredShades = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900'];
       const missingShades = requiredShades.filter(shade => !config.customColors.primary[shade]);
@@ -728,9 +645,6 @@ export class PremiumThemeManager {
     };
   }
 
-  /**
-   * Get theme analytics
-   */
   getAnalytics() {
     const themes = Object.values(PREMIUM_THEME_TEMPLATES);
     
@@ -749,9 +663,6 @@ export class PremiumThemeManager {
     };
   }
 
-  /**
-   * Export user theme data
-   */
   exportUserData() {
     return {
       customThemes: Array.from(this.customThemes.entries()),
@@ -762,10 +673,6 @@ export class PremiumThemeManager {
     };
   }
 
-  /**
-   * Import user theme data
-   * @param {Object} data - User theme data
-   */
   importUserData(data) {
     if (data.customThemes) {
       this.customThemes = new Map(data.customThemes);
@@ -785,14 +692,8 @@ export class PremiumThemeManager {
   }
 }
 
-/**
- * Theme utility functions
- */
 export const ThemeUtils = {
-  /**
-   * Generate color palette from a single color
-   * @param {string} baseColor - Base color in hex format
-   */
+
   generateColorPalette(baseColor) {
     const hex = baseColor.replace('#', '');
     const r = parseInt(hex.substr(0, 2), 16);
@@ -814,11 +715,6 @@ export const ThemeUtils = {
     return palette;
   },
 
-  /**
-   * Check color contrast ratio
-   * @param {string} color1 - First color in hex
-   * @param {string} color2 - Second color in hex
-   */
   getContrastRatio(color1, color2) {
     const getLuminance = (hex) => {
       const rgb = parseInt(hex.slice(1), 16);
@@ -840,21 +736,15 @@ export const ThemeUtils = {
     return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
   },
 
-  /**
-   * Convert theme config to CSS variables
-   * @param {Object} config - Theme configuration
-   */
   configToCSS(config) {
     let css = ':root {\n';
     
-    // Add color variables
     if (config.customColors?.primary) {
       Object.entries(config.customColors.primary).forEach(([shade, color]) => {
         css += `  --color-primary-${shade}: ${color};\n`;
       });
     }
     
-    // Add typography variables
     if (config.typography) {
       if (config.typography.fontFamily) {
         css += `  --font-family-primary: "${config.typography.fontFamily}", sans-serif;\n`;
@@ -870,7 +760,6 @@ export const ThemeUtils = {
       }
     }
     
-    // Add effect variables
     if (config.effects) {
       if (config.effects.borderRadius) {
         css += `  --border-radius-base: ${config.effects.borderRadius};\n`;
@@ -882,7 +771,6 @@ export const ThemeUtils = {
     
     css += '}\n';
     
-    // Add dark mode styles if needed
     if (config.theme === 'dark') {
       css += '\nhtml.dark {\n';
       css += '  color-scheme: dark;\n';
@@ -892,10 +780,6 @@ export const ThemeUtils = {
     return css;
   },
 
-  /**
-   * Get optimal text color for background
-   * @param {string} backgroundColor - Background color in hex
-   */
   getOptimalTextColor(backgroundColor) {
     const whiteRatio = this.getContrastRatio(backgroundColor, '#ffffff');
     const blackRatio = this.getContrastRatio(backgroundColor, '#000000');
@@ -903,18 +787,12 @@ export const ThemeUtils = {
     return whiteRatio > blackRatio ? '#ffffff' : '#000000';
   },
 
-  /**
-   * Generate harmonious color scheme
-   * @param {string} baseColor - Base color in hex
-   * @param {string} harmonyType - Type of harmony
-   */
   generateColorHarmony(baseColor, harmonyType = 'complementary') {
     const hex = baseColor.replace('#', '');
     const r = parseInt(hex.substr(0, 2), 16) / 255;
     const g = parseInt(hex.substr(2, 2), 16) / 255;
     const b = parseInt(hex.substr(4, 2), 16) / 255;
     
-    // Convert to HSL
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
     const diff = max - min;
@@ -958,12 +836,6 @@ export const ThemeUtils = {
     return colors;
   },
 
-  /**
-   * Convert HSL to hex
-   * @param {number} h - Hue (0-360)
-   * @param {number} s - Saturation (0-100)
-   * @param {number} l - Lightness (0-100)
-   */
   hslToHex(h, s, l) {
     h /= 360;
     s /= 100;
@@ -997,11 +869,6 @@ export const ThemeUtils = {
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   },
 
-  /**
-   * Validate color accessibility
-   * @param {Object} colors - Color palette
-   * @param {string} backgroundColor - Background color to test against
-   */
   validateColorAccessibility(colors, backgroundColor = '#ffffff') {
     const results = {};
     
@@ -1019,12 +886,6 @@ export const ThemeUtils = {
     return results;
   },
 
-  /**
-   * Blend two colors
-   * @param {string} color1 - First color in hex
-   * @param {string} color2 - Second color in hex
-   * @param {number} ratio - Blend ratio (0-1)
-   */
   blendColors(color1, color2, ratio = 0.5) {
     const hex1 = color1.replace('#', '');
     const hex2 = color2.replace('#', '');
@@ -1046,7 +907,6 @@ export const ThemeUtils = {
   }
 };
 
-// Create singleton instance
 const premiumThemeManager = new PremiumThemeManager();
 
 export default premiumThemeManager;

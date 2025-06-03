@@ -4,10 +4,10 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { applyThemeVariables, applyDensityClasses, applyFontSizeClasses } from '@/lib/appearanceUtils';
 
 const defaultAppearance = {
-  theme: 'system', // 'light', 'dark', 'system'
-  colorScheme: 'default', // 'default', 'green', 'purple', 'red', 'orange'
-  density: 'default', // 'compact', 'default', 'comfortable'
-  fontSize: 'default', // 'small', 'default', 'large'
+  theme: 'system',
+  colorScheme: 'default', 
+  density: 'default', 
+  fontSize: 'default', 
   statusColors: {
     'Saved': 'blue',
     'Applied': 'purple',

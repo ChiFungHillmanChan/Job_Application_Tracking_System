@@ -1,5 +1,3 @@
-// backend/controllers/authController.js - Fixed version with proper preference handling
-
 const User = require('../models/User');
 const asyncHandler = require('express-async-handler');
 const { generateResetPasswordToken, verifyToken } = require('../utils/tokenManager');
@@ -23,13 +21,9 @@ const generateToken = (user) => {
   );
 };
 
-// @desc    Register user
-// @route   POST /api/auth/register
-// @access  Public
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
-  // Input validation
   if (!name || !email || !password) {
     logger.warn('Registration attempt with missing required fields');
     return res.status(400).json({
@@ -45,8 +39,6 @@ const registerUser = asyncHandler(async (req, res) => {
       error: 'Password must be at least 6 characters'
     });
   }
-
-  // Check if user already exists
   const userExists = await User.findOne({ email });
 
   if (userExists) {
@@ -58,15 +50,12 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Create user
     const user = await User.create({
       name,
       email,
       password
     });
 
-    logger.info(`New user registered: ${email}`);
-    
     res.status(201).json({
       success: true,
       token: generateToken(user),
@@ -81,7 +70,6 @@ const registerUser = asyncHandler(async (req, res) => {
   } catch (error) {
     logger.error(`Error during user registration: ${error.message}`);
     
-    // Handle mongoose validation errors
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
       return res.status(400).json({
@@ -97,13 +85,9 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  // Input validation
   if (!email || !password) {
     logger.warn('Login attempt with missing email or password');
     return res.status(400).json({
@@ -112,7 +96,6 @@ const loginUser = asyncHandler(async (req, res) => {
     });
   }
 
-  // Find user
   const user = await User.findOne({ email }).select('+password');
 
   if (!user) {
@@ -123,7 +106,6 @@ const loginUser = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check if password matches
   const isMatch = await user.matchPassword(password);
   if (!isMatch) {
     logger.warn(`Failed login attempt (password mismatch) for email: ${email}`);
@@ -148,12 +130,8 @@ const loginUser = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Get current logged in user with full preferences
-// @route   GET /api/auth/me
-// @access  Private
 const getMe = asyncHandler(async (req, res) => {
   try {
-    // Get user with all data
     const user = await User.findById(req.user._id);
     
     if (!user) {
@@ -164,7 +142,6 @@ const getMe = asyncHandler(async (req, res) => {
       });
     }
 
-    // Ensure preferences exist with defaults
     const defaultPreferences = {
       theme: 'system',
       notifications: {
@@ -214,9 +191,6 @@ const getMe = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Logout user (clear cookie)
-// @route   GET /api/auth/logout
-// @access  Private
 const logoutUser = asyncHandler(async (req, res) => {
   logger.info(`User logged out: ${req.user.email}`);
   
@@ -226,14 +200,11 @@ const logoutUser = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Update user profile with enhanced preferences support
-// @route   PUT /api/auth/updateprofile
-// @access  Private
 const updateProfile = asyncHandler(async (req, res) => {
   const { name, email, preferences } = req.body;
   
   try {
-    // Find user by ID
+
     const user = await User.findById(req.user.id);
     
     if (!user) {
@@ -244,13 +215,11 @@ const updateProfile = asyncHandler(async (req, res) => {
       });
     }
     
-    // Update basic fields
     if (name && name.trim()) {
       user.name = name.trim();
     }
     
     if (email && email !== user.email) {
-      // Validate email format
       const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
       if (!emailRegex.test(email)) {
         return res.status(400).json({
@@ -259,7 +228,6 @@ const updateProfile = asyncHandler(async (req, res) => {
         });
       }
       
-      // Check if email is already in use by another user
       const emailExists = await User.findOne({ email });
       if (emailExists && emailExists._id.toString() !== req.user.id) {
         logger.warn(`Profile update attempt with existing email: ${email}`);
@@ -271,9 +239,7 @@ const updateProfile = asyncHandler(async (req, res) => {
       user.email = email;
     }
     
-    // Update preferences with proper validation and merging
     if (preferences && typeof preferences === 'object') {
-      // Initialize preferences if they don't exist
       if (!user.preferences) {
         user.preferences = {
           theme: 'system',

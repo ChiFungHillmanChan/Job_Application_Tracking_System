@@ -18,7 +18,6 @@ const FontFamilySelector = ({
   const [isOpen, setIsOpen] = useState(false);
   const [loadedFonts, setLoadedFonts] = useState(new Set());
   const [favoritesFonts, setFavoritesFonts] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   
   const selectorRef = useRef(null);
 
@@ -34,11 +33,7 @@ const FontFamilySelector = ({
       { name: 'Poppins', variants: ['300', '400', '500', '600', '700'], popularity: 78 },
       { name: 'Nunito', variants: ['300', '400', '600', '700'], popularity: 75 },
       { name: 'Ubuntu', variants: ['300', '400', '500', '700'], popularity: 72 },
-      { name: 'Oxygen', variants: ['300', '400', '700'], popularity: 70 },
-      { name: 'Work Sans', variants: ['300', '400', '500', '600', '700'], popularity: 68 },
-      { name: 'Fira Sans', variants: ['300', '400', '500', '600', '700'], popularity: 65 },
-      { name: 'Noto Sans', variants: ['400', '700'], popularity: 63 },
-      { name: 'PT Sans', variants: ['400', '700'], popularity: 60 }
+      { name: 'Work Sans', variants: ['300', '400', '500', '600', '700'], popularity: 68 }
     ],
     'serif': [
       { name: 'Playfair Display', variants: ['400', '500', '600', '700'], popularity: 85 },
@@ -46,41 +41,26 @@ const FontFamilySelector = ({
       { name: 'Lora', variants: ['400', '500', '600', '700'], popularity: 78 },
       { name: 'Source Serif Pro', variants: ['400', '600', '700'], popularity: 75 },
       { name: 'Crimson Text', variants: ['400', '600', '700'], popularity: 72 },
-      { name: 'Libre Baskerville', variants: ['400', '700'], popularity: 70 },
-      { name: 'Cormorant Garamond', variants: ['300', '400', '500', '600', '700'], popularity: 68 },
-      { name: 'PT Serif', variants: ['400', '700'], popularity: 65 },
-      { name: 'Noto Serif', variants: ['400', '700'], popularity: 63 },
-      { name: 'Georgia', variants: ['400', '700'], popularity: 60 }
+      { name: 'Libre Baskerville', variants: ['400', '700'], popularity: 70 }
     ],
     'monospace': [
       { name: 'Fira Code', variants: ['300', '400', '500', '600', '700'], popularity: 90 },
       { name: 'Source Code Pro', variants: ['300', '400', '500', '600', '700'], popularity: 85 },
       { name: 'JetBrains Mono', variants: ['300', '400', '500', '600', '700'], popularity: 80 },
       { name: 'Inconsolata', variants: ['400', '700'], popularity: 75 },
-      { name: 'Roboto Mono', variants: ['300', '400', '500', '700'], popularity: 72 },
-      { name: 'Space Mono', variants: ['400', '700'], popularity: 68 },
-      { name: 'IBM Plex Mono', variants: ['300', '400', '500', '600', '700'], popularity: 65 },
-      { name: 'Courier Prime', variants: ['400', '700'], popularity: 60 }
+      { name: 'Roboto Mono', variants: ['300', '400', '500', '700'], popularity: 72 }
     ],
     'display': [
       { name: 'Oswald', variants: ['300', '400', '500', '600', '700'], popularity: 85 },
       { name: 'Raleway', variants: ['300', '400', '500', '600', '700'], popularity: 82 },
       { name: 'Bebas Neue', variants: ['400'], popularity: 80 },
-      { name: 'Anton', variants: ['400'], popularity: 75 },
-      { name: 'Fjalla One', variants: ['400'], popularity: 70 },
-      { name: 'Righteous', variants: ['400'], popularity: 68 },
-      { name: 'Bangers', variants: ['400'], popularity: 65 },
-      { name: 'Fredoka One', variants: ['400'], popularity: 62 }
+      { name: 'Anton', variants: ['400'], popularity: 75 }
     ],
     'handwriting': [
       { name: 'Dancing Script', variants: ['400', '500', '600', '700'], popularity: 85 },
       { name: 'Pacifico', variants: ['400'], popularity: 80 },
       { name: 'Lobster', variants: ['400'], popularity: 75 },
-      { name: 'Great Vibes', variants: ['400'], popularity: 70 },
-      { name: 'Kaushan Script', variants: ['400'], popularity: 68 },
-      { name: 'Satisfy', variants: ['400'], popularity: 65 },
-      { name: 'Caveat', variants: ['400', '700'], popularity: 62 },
-      { name: 'Patrick Hand', variants: ['400'], popularity: 60 }
+      { name: 'Great Vibes', variants: ['400'], popularity: 70 }
     ]
   };
 
@@ -118,7 +98,7 @@ const FontFamilySelector = ({
     setLoadedFonts(prev => new Set([...prev, fontName]));
   };
 
-  // Handle font selection
+  // FIXED: Simplified font selection without complex interaction tracking
   const handleFontSelect = (fontName) => {
     setSelectedFont(fontName);
     onChange?.(fontName);
@@ -212,7 +192,7 @@ const FontFamilySelector = ({
         </div>
       )}
 
-      {/* Font dropdown */}
+      {/* FIXED: Simplified font dropdown without interaction blocking */}
       {isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-hidden animate-fade-in">
           {/* Search and filters */}
@@ -362,20 +342,6 @@ const FontFamilySelector = ({
               </div>
             )}
           </div>
-
-          {/* Load more button */}
-          {getAllFonts().length > maxResults && getFilteredFonts().length === maxResults && (
-            <div className="p-3 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => {
-                  // Implement load more functionality
-                }}
-                className="w-full py-2 text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors duration-200"
-              >
-                Load more fonts...
-              </button>
-            </div>
-          )}
         </div>
       )}
 

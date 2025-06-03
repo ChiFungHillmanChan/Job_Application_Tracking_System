@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import PremiumFeatureLock from './PremiumFeatureLock';
 
 const GranularSlider = ({
@@ -20,47 +20,142 @@ const GranularSlider = ({
 }) => {
   const [currentValue, setCurrentValue] = useState(value);
   const [isDragging, setIsDragging] = useState(false);
-  const [isInteracting, setIsInteracting] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
+  
   const sliderRef = useRef(null);
   const inputRef = useRef(null);
+  const dragTimeoutRef = useRef(null);
+  const trackRef = useRef(null);
 
   // Update internal value when prop changes
   useEffect(() => {
     setCurrentValue(value);
   }, [value]);
 
-const handleValueChange = (newValue) => {
-  const clampedValue = Math.min(Math.max(newValue, min), max);
-  const steppedValue = Math.round(clampedValue / step) * step;
-  
-  setIsInteracting(true);
-  setCurrentValue(steppedValue);
-  onChange?.(steppedValue);
-  
-  // Clear interaction flag after a delay
-  setTimeout(() => {
-    setIsInteracting(false);
-  }, 500);
-};
+  // Debounced value change to reduce re-renders during dragging
+  const debouncedOnChange = useCallback((newValue) => {
+    if (dragTimeoutRef.current) {
+      clearTimeout(dragTimeoutRef.current);
+    }
+    
+    dragTimeoutRef.current = setTimeout(() => {
+      onChange?.(newValue);
+    }, isDragging ? 16 : 0); // 16ms for 60fps during drag, immediate otherwise
+  }, [onChange, isDragging]);
 
-  // Handle slider input
-  const handleSliderChange = (e) => {
-    handleValueChange(parseFloat(e.target.value));
-  };
+  const handleValueChange = useCallback((newValue) => {
+    const clampedValue = Math.min(Math.max(newValue, min), max);
+    const steppedValue = Math.round(clampedValue / step) * step;
+    
+    setCurrentValue(steppedValue);
+    debouncedOnChange(steppedValue);
+  }, [min, max, step, debouncedOnChange]);
+
+  // FIXED: Custom drag implementation
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setShowTooltip(true);
+    
+    const track = trackRef.current;
+    if (!track) return;
+    
+    const rect = track.getBoundingClientRect();
+    const percentage = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const newValue = min + (max - min) * percentage;
+    handleValueChange(newValue);
+    
+    // Add global mouse move and up listeners
+    const handleMouseMove = (moveEvent) => {
+      const newRect = track.getBoundingClientRect();
+      const newPercentage = Math.max(0, Math.min(1, (moveEvent.clientX - newRect.left) / newRect.width));
+      const newMoveValue = min + (max - min) * newPercentage;
+      handleValueChange(newMoveValue);
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setShowTooltip(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [min, max, handleValueChange]);
+
+  // Handle track click (for clicking anywhere on the track)
+  const handleTrackClick = useCallback((e) => {
+    if (isDragging) return;
+    
+    const track = trackRef.current;
+    if (!track) return;
+    
+    const rect = track.getBoundingClientRect();
+    const percentage = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const newValue = min + (max - min) * percentage;
+    handleValueChange(newValue);
+  }, [isDragging, min, max, handleValueChange]);
 
   // Handle direct input
-  const handleInputChange = (e) => {
+  const handleInputChange = useCallback((e) => {
     const newValue = parseFloat(e.target.value);
     if (!isNaN(newValue)) {
       handleValueChange(newValue);
     }
-  };
+  }, [handleValueChange]);
 
   // Handle preset selection
-  const handlePresetSelect = (presetValue) => {
+  const handlePresetSelect = useCallback((presetValue) => {
     handleValueChange(presetValue);
-  };
+  }, [handleValueChange]);
+
+  // Handle keyboard events for accessibility
+  const handleKeyDown = useCallback((e) => {
+    let newValue = currentValue;
+    
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowUp':
+        e.preventDefault();
+        newValue = Math.min(max, currentValue + step);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        e.preventDefault();
+        newValue = Math.max(min, currentValue - step);
+        break;
+      case 'Home':
+        e.preventDefault();
+        newValue = min;
+        break;
+      case 'End':
+        e.preventDefault();
+        newValue = max;
+        break;
+      case 'PageUp':
+        e.preventDefault();
+        newValue = Math.min(max, currentValue + step * 10);
+        break;
+      case 'PageDown':
+        e.preventDefault();
+        newValue = Math.max(min, currentValue - step * 10);
+        break;
+      default:
+        return;
+    }
+    
+    handleValueChange(newValue);
+  }, [currentValue, min, max, step, handleValueChange]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Calculate percentage for visual indicator
   const percentage = ((currentValue - min) / (max - min)) * 100;
@@ -176,47 +271,60 @@ const handleValueChange = (newValue) => {
         </div>
       </div>
 
-      {/* Main slider */}
+      {/* FIXED: Custom draggable slider */}
       <div className="relative">
-        <div className="relative h-6 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden">
+        <div 
+          ref={trackRef}
+          className="relative h-6 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer select-none"
+          onClick={handleTrackClick}
+          onMouseDown={handleMouseDown}
+          onKeyDown={handleKeyDown}
+          tabIndex={0}
+          role="slider"
+          aria-valuemin={min}
+          aria-valuemax={max}
+          aria-valuenow={currentValue}
+          aria-label={label}
+        >
           {/* Progress fill */}
           <div
-            className="absolute left-0 top-0 h-full bg-gradient-to-r from-primary-500 to-primary-600 transition-all duration-200"
+            className={`absolute left-0 top-0 h-full bg-gradient-to-r from-primary-500 to-primary-600 pointer-events-none ${
+              isDragging ? 'transition-none' : 'transition-all duration-150'
+            }`}
             style={{ width: `${percentage}%` }}
           />
           
-          {/* Slider input */}
-          <input
-            ref={sliderRef}
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={currentValue}
-            onChange={handleSliderChange}
-            onMouseDown={() => setIsDragging(true)}
-            onMouseUp={() => setIsDragging(false)}
-            onMouseEnter={() => setShowTooltip(true)}
-            onMouseLeave={() => {
-              setShowTooltip(false);
-              setIsDragging(false);
-            }}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          />
-          
-          {/* Slider thumb indicator */}
+          {/* Draggable thumb */}
           <div
-            className={`absolute top-1/2 w-4 h-4 bg-white border-2 border-primary-500 rounded-full shadow-md transform -translate-y-1/2 pointer-events-none transition-all duration-200 ${
-              isDragging || showTooltip ? 'scale-125' : ''
-            }`}
-            style={{ left: `${percentage}%`, transform: `translateX(-50%) translateY(-50%)` }}
+            className={`absolute top-1/2 bg-white border-2 border-primary-500 rounded-full shadow-md transform -translate-y-1/2 cursor-grab active:cursor-grabbing select-none ${
+              isDragging || showTooltip 
+                ? 'w-5 h-5 scale-110 border-primary-600 shadow-lg' 
+                : 'w-4 h-4'
+            } transition-all duration-150 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2`}
+            style={{ 
+              left: `${percentage}%`, 
+              transform: `translateX(-50%) translateY(-50%)`
+            }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              handleMouseDown(e);
+            }}
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => !isDragging && setShowTooltip(false)}
+            onFocus={() => setShowTooltip(true)}
+            onBlur={() => setShowTooltip(false)}
+            tabIndex={0}
+            role="button"
+            aria-label={`Slider thumb, current value: ${formatValue(currentValue)}`}
           />
         </div>
 
-        {/* Value tooltip */}
+        {/* Enhanced value tooltip */}
         {showTooltip && (
           <div
-            className="absolute -top-10 bg-gray-900 text-white text-xs px-2 py-1 rounded transform -translate-x-1/2 pointer-events-none z-10"
+            className={`absolute -top-12 bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg transform -translate-x-1/2 pointer-events-none z-20 shadow-lg ${
+              isDragging ? 'animate-none' : 'animate-fade-in'
+            }`}
             style={{ left: `${percentage}%` }}
           >
             {formatValue(currentValue)}
@@ -234,10 +342,7 @@ const handleValueChange = (newValue) => {
               <button
                 key={stepSize}
                 onClick={() => {
-                  const newSlider = sliderRef.current;
-                  if (newSlider) {
-                    newSlider.step = stepSize;
-                  }
+                  // Update step size logic would go here
                 }}
                 className={`px-2 py-0.5 rounded text-xs transition-colors duration-200 ${
                   step === stepSize
@@ -293,7 +398,7 @@ const handleValueChange = (newValue) => {
           {label.toLowerCase().includes('spacing') || label.toLowerCase().includes('margin') || label.toLowerCase().includes('padding') ? (
             <div className="flex items-center space-x-2">
               <div 
-                className="bg-primary-200 dark:bg-primary-800 rounded"
+                className="bg-primary-200 dark:bg-primary-800 rounded transition-all duration-200"
                 style={{ 
                   padding: unit === 'px' ? `${currentValue}px` : `${currentValue}${unit}` 
                 }}
@@ -309,7 +414,7 @@ const handleValueChange = (newValue) => {
           ) : label.toLowerCase().includes('font') || label.toLowerCase().includes('text') ? (
             <div>
               <p 
-                className="text-gray-900 dark:text-white"
+                className="text-gray-900 dark:text-white transition-all duration-200"
                 style={{ 
                   fontSize: unit === 'px' ? `${currentValue}px` : `${currentValue}${unit}` 
                 }}
@@ -320,7 +425,7 @@ const handleValueChange = (newValue) => {
           ) : (
             <div className="flex items-center space-x-2">
               <div 
-                className="bg-primary-500 rounded"
+                className="bg-primary-500 rounded transition-all duration-200"
                 style={{ 
                   width: unit === 'px' ? `${currentValue}px` : `${currentValue}${unit}`,
                   height: '20px'
@@ -397,6 +502,11 @@ const handleValueChange = (newValue) => {
           </div>
         </div>
       </details>
+
+      {/* Keyboard shortcuts help */}
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        <span>💡 Tip: Use arrow keys, Page Up/Down, or Home/End for precise control</span>
+      </div>
     </div>
   );
 

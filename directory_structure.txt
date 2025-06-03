@@ -9,6 +9,7 @@
 │   │   ├── controllers
 │   │   │   ├── authController.js
 │   │   │   ├── jobController.js
+│   │   │   ├── jobFinderController.js
 │   │   │   ├── resumeController.js
 │   │   │   ├── subscriptionController.js
 │   │   │   └── themeController.js
@@ -23,17 +24,20 @@
 │   │   │   ├── CustomTheme.js
 │   │   │   ├── Job.js
 │   │   │   ├── Resume.js
+│   │   │   ├── SavedJob.js
 │   │   │   └── User.js
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── routes
 │   │   │   ├── admin.js
 │   │   │   ├── auth.js
+│   │   │   ├── jobFinder.js
 │   │   │   ├── jobs.js
 │   │   │   ├── resumes.js
 │   │   │   ├── subscription.js
 │   │   │   └── theme.js
 │   │   ├── scripts
+│   │   │   ├── checkBackend.js
 │   │   │   ├── createSuperUser.js
 │   │   │   ├── migrateResumes.js
 │   │   │   └── upgradeUser.js
@@ -97,6 +101,10 @@
 │   │   │   │       └── [token]
 │   │   │   │           └── page.jsx
 │   │   │   ├── dashboard
+│   │   │   │   ├── job-finder
+│   │   │   │   │   ├── page.jsx
+│   │   │   │   │   └── saved
+│   │   │   │   │       └── page.jsx
 │   │   │   │   ├── jobs
 │   │   │   │   │   ├── new
 │   │   │   │   │   │   └── page.jsx
@@ -141,6 +149,16 @@
 │   │   │   │   ├── JobForm.jsx
 │   │   │   │   ├── LoginForm.jsx
 │   │   │   │   └── RegisterForm.jsx
+│   │   │   ├── job-finder
+│   │   │   │   ├── JobFinderExportJob.jsx
+│   │   │   │   ├── JobFinderFilters.jsx
+│   │   │   │   ├── JobFinderJobCard.jsx
+│   │   │   │   ├── JobFinderJobDetail.jsx
+│   │   │   │   ├── JobFinderJobList.jsx
+│   │   │   │   ├── JobFinderLayout.jsx
+│   │   │   │   ├── JobFinderMap.jsx
+│   │   │   │   ├── JobFinderSavedJobs.jsx
+│   │   │   │   └── JobFinderSearch.jsx
 │   │   │   ├── layout
 │   │   │   │   ├── Footer.jsx
 │   │   │   │   ├── Header.jsx
@@ -151,13 +169,18 @@
 │   │   │       ├── Card.jsx
 │   │   │       ├── ColorPicker.jsx
 │   │   │       ├── Input.jsx
+│   │   │       ├── JobTypeSelector.jsx
+│   │   │       ├── LeafletMap.jsx
+│   │   │       ├── LocationInput.jsx
 │   │   │       ├── premium
 │   │   │       │   ├── AdvancedColorPicker.jsx
 │   │   │       │   ├── CustomCSSEditor.jsx
 │   │   │       │   ├── FontFamilySelector.jsx
 │   │   │       │   ├── GranularSlider.jsx
 │   │   │       │   └── PremiumFeatureLock.jsx
+│   │   │       ├── SalaryRangeSlider.jsx
 │   │   │       └── Select.jsx
+│   │   ├── config
 │   │   ├── contexts
 │   │   │   └── AppearanceContext.js
 │   │   ├── lib
@@ -167,8 +190,14 @@
 │   │   │   ├── fontLibrary.js
 │   │   │   ├── hooks
 │   │   │   │   ├── useAuth.js
+│   │   │   │   ├── useJobSearch.js
+│   │   │   │   ├── useLocation.js
+│   │   │   │   ├── useSavedJobs.js
 │   │   │   │   └── useTheme.js
+│   │   │   ├── jobFinderCache.js
+│   │   │   ├── jobFinderService.js
 │   │   │   ├── jobService.js
+│   │   │   ├── locationService.js
 │   │   │   ├── premiumTheme.js
 │   │   │   ├── resumeService.js
 │   │   │   ├── subscriptionService.js
@@ -180,4 +209,4 @@
 │   └── tailwind.config.js
 └── README.md
 
-57 directories, 124 files
+61 directories, 149 files

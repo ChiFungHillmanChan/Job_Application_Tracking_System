@@ -45,15 +45,13 @@ const ThemeContext = createContext({
   updateStatusColor: () => {},
   resetToDefaults: () => {},
   getStatusColor: () => {},
-  saveToProfile: () => {},
-  syncFromProfile: () => {},
-  setSaveMode: () => {},
+  savePreferences: () => {},
   loading: false,
   error: null,
-  saveMode: 'device',
-  lastSynced: null,
   hasUnsavedChanges: false,
-  syncStatus: 'idle',
+  isSaving: false,
+  lastSaved: null,
+  saveStatus: 'idle',
 });
 
 export const ThemeProvider = ({ children }) => {
@@ -61,65 +59,21 @@ export const ThemeProvider = ({ children }) => {
   const [appearance, setAppearance] = useState(defaultAppearance);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [saveMode, setSaveMode] = useState('device');
-  const [lastSynced, setLastSynced] = useState(null);
+  
+  // ✅ AFTER: Simple state management for manual save
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
-  const [syncStatus, setSyncStatus] = useState('idle');
-
-  // Debounced save function with better error handling
-  const debouncedSaveToProfile = useCallback((() => {
-    let timeout;
-    return (settings) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(async () => {
-        if (!autoSaveEnabled || !isAuthenticated() || !token) {
-          console.log('🔒 Auto-save skipped: not authenticated or disabled');
-          return;
-        }
-
-        if (saveMode !== 'hybrid' && saveMode !== 'account') {
-          console.log('📱 Auto-save skipped: device-only mode');
-          return;
-        }
-
-        try {
-          setSyncStatus('syncing');
-          console.log('🔄 Auto-saving appearance settings...');
-          
-          await saveToProfileAPI(settings);
-          
-          setLastSynced(new Date().toISOString());
-          setHasUnsavedChanges(false);
-          setSyncStatus('success');
-          
-          console.log('✅ Auto-save successful');
-          
-          // Clear success status after 3 seconds
-          setTimeout(() => setSyncStatus('idle'), 3000);
-          
-        } catch (err) {
-          console.warn('⚠️ Auto-save failed:', err.message);
-          setHasUnsavedChanges(true);
-          setSyncStatus('error');
-          
-          // Clear error status after 5 seconds
-          setTimeout(() => setSyncStatus('idle'), 5000);
-        }
-      }, 2000);
-    };
-  })(), [autoSaveEnabled, saveMode, isAuthenticated, token]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle', 'saving', 'success', 'error'
 
   // Initialize appearance system
   useEffect(() => {
     const initializeAppearance = async () => {
       setLoading(true);
       setError(null);
-      setSyncStatus('idle');
       
       try {
         let finalAppearance = defaultAppearance;
-        let initialSaveMode = 'device';
         
         console.log('🎨 Initializing appearance system...');
         
@@ -149,26 +103,25 @@ export const ThemeProvider = ({ children }) => {
                 saveToLocalStorage({ ...profileAppearance, lastModified: profileTimestamp });
                 console.log('☁️ Using profile settings (newer than local)');
               } else if (localTimestamp > profileTimestamp) {
-                // Local is newer, keep it but mark for sync
+                // Local is newer, keep it but mark for potential sync
                 setHasUnsavedChanges(true);
-                console.log('📝 Using local settings (newer than profile, will sync)');
+                console.log('📝 Using local settings (newer than profile)');
               } else {
                 // Same or no timestamp, use profile
                 finalAppearance = profileAppearance;
                 console.log('🔄 Using profile settings (synchronized)');
               }
               
-              initialSaveMode = 'hybrid';
-              setLastSynced(profileResult.lastModified || new Date().toISOString());
+              setLastSaved(profileResult.lastModified || new Date().toISOString());
             } else {
               // No profile settings exist yet
-              initialSaveMode = 'hybrid';
-              setHasUnsavedChanges(true);
-              console.log('📝 No profile settings found, will create from local');
+              if (localAppearance) {
+                setHasUnsavedChanges(true);
+                console.log('📝 No profile settings found, local settings available for sync');
+              }
             }
           } catch (err) {
             console.warn('⚠️ Could not load from profile:', err.message);
-            initialSaveMode = 'device';
             
             // Only set error if it's not a network issue
             if (!err.message.includes('Network') && !err.message.includes('CORS')) {
@@ -180,7 +133,6 @@ export const ThemeProvider = ({ children }) => {
         }
 
         setAppearance(finalAppearance);
-        setSaveMode(initialSaveMode);
         applyAppearanceSettings(finalAppearance);
 
         // Apply system theme detection if needed
@@ -188,13 +140,12 @@ export const ThemeProvider = ({ children }) => {
           applySystemTheme();
         }
 
-        console.log(`✅ Appearance system initialized in ${initialSaveMode} mode`);
+        console.log('✅ Appearance system initialized');
 
       } catch (err) {
         console.error('❌ Error initializing appearance:', err);
         setError('Failed to load appearance settings');
         applyAppearanceSettings(defaultAppearance);
-        setSaveMode('device');
       } finally {
         setLoading(false);
       }
@@ -202,21 +153,6 @@ export const ThemeProvider = ({ children }) => {
 
     initializeAppearance();
   }, [user, isAuthenticated, token]);
-
-  // Handle authentication state changes
-  useEffect(() => {
-    if (isAuthenticated() && user && token && saveMode === 'device') {
-      console.log('🔄 Upgrading to hybrid mode after login');
-      setSaveMode('hybrid');
-      setHasUnsavedChanges(true);
-    } else if (!isAuthenticated() && saveMode === 'hybrid') {
-      console.log('📱 Downgrading to device-only mode after logout');
-      setSaveMode('device');
-      setLastSynced(null);
-      setHasUnsavedChanges(false);
-      setSyncStatus('idle');
-    }
-  }, [user, isAuthenticated, token, saveMode]);
 
   // Listen for system theme changes
   useEffect(() => {
@@ -234,27 +170,21 @@ export const ThemeProvider = ({ children }) => {
     return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
   }, [appearance.theme]);
 
-  // Auto-save when appearance changes
+  // ✅ AFTER: Apply appearance changes immediately (for preview) but don't auto-save
   useEffect(() => {
     if (!loading) {
-      const settingsWithTimestamp = {
-        ...appearance,
-        lastModified: Date.now()
-      };
+      // Always save to localStorage for immediate persistence
+      saveToLocalStorage(appearance);
       
-      // Always save to localStorage
-      saveToLocalStorage(settingsWithTimestamp);
-      
-      // Apply visual changes
+      // Apply visual changes immediately for preview
       applyAppearanceSettings(appearance);
       
-      // Auto-save to profile if in hybrid mode
-      if ((saveMode === 'hybrid' || saveMode === 'account') && isAuthenticated() && token) {
+      // Mark as having unsaved changes (but don't auto-save)
+      if (!hasUnsavedChanges) {
         setHasUnsavedChanges(true);
-        debouncedSaveToProfile(appearance);
       }
     }
-  }, [appearance, loading, saveMode, isAuthenticated, token, debouncedSaveToProfile]);
+  }, [appearance, loading]);
 
   // Storage functions
   const loadFromLocalStorage = () => {
@@ -276,7 +206,11 @@ export const ThemeProvider = ({ children }) => {
     if (typeof window === 'undefined') return;
     
     try {
-      localStorage.setItem('job_tracker_appearance', JSON.stringify(settings));
+      const settingsWithTimestamp = {
+        ...settings,
+        lastModified: Date.now()
+      };
+      localStorage.setItem('job_tracker_appearance', JSON.stringify(settingsWithTimestamp));
     } catch (err) {
       console.warn('⚠️ Error saving to localStorage:', err);
     }
@@ -384,13 +318,14 @@ export const ThemeProvider = ({ children }) => {
     document.documentElement.classList.toggle('dark', prefersDark);
   };
 
-  // Public API methods
+  // ✅ AFTER: Simple update functions (no auto-save)
   const updateSetting = (key, value) => {
     console.log(`🎨 Updating ${key} to ${value}`);
     setAppearance(prev => ({
       ...prev,
       [key]: value
     }));
+    // Note: hasUnsavedChanges will be set by useEffect
   };
 
   const updateStatusColor = (status, color) => {
@@ -402,27 +337,13 @@ export const ThemeProvider = ({ children }) => {
         [status]: color
       }
     }));
+    // Note: hasUnsavedChanges will be set by useEffect
   };
 
   const resetToDefaults = async () => {
     console.log('🔄 Resetting appearance to defaults');
     setAppearance(defaultAppearance);
-    
-    if ((saveMode === 'hybrid' || saveMode === 'account') && isAuthenticated() && token) {
-      try {
-        setSyncStatus('syncing');
-        await saveToProfileAPI(defaultAppearance);
-        setLastSynced(new Date().toISOString());
-        setHasUnsavedChanges(false);
-        setSyncStatus('success');
-        setTimeout(() => setSyncStatus('idle'), 3000);
-      } catch (err) {
-        console.warn('⚠️ Failed to sync reset to profile:', err.message);
-        setHasUnsavedChanges(true);
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 5000);
-      }
-    }
+    setHasUnsavedChanges(true);
   };
 
   const getStatusColor = (status) => {
@@ -438,8 +359,8 @@ export const ThemeProvider = ({ children }) => {
     };
   };
 
-  // Manual sync functions
-  const saveToProfile = async () => {
+  // ✅ AFTER: Single manual save function
+  const savePreferences = async () => {
     if (!isAuthenticated() || !token) {
       return { 
         success: false, 
@@ -448,79 +369,39 @@ export const ThemeProvider = ({ children }) => {
     }
 
     try {
-      setLoading(true);
-      setSyncStatus('syncing');
+      setIsSaving(true);
+      setSaveStatus('saving');
+      console.log('💾 Saving preferences to both device and account...');
       
+      // Save to both device and account
+      saveToLocalStorage(appearance);
       await saveToProfileAPI(appearance);
-      setLastSynced(new Date().toISOString());
-      setHasUnsavedChanges(false);
-      setSaveMode('hybrid');
-      setSyncStatus('success');
       
-      setTimeout(() => setSyncStatus('idle'), 3000);
+      setHasUnsavedChanges(false);
+      setLastSaved(new Date().toISOString());
+      setSaveStatus('success');
+      
+      // Clear success status after 3 seconds
+      setTimeout(() => setSaveStatus('idle'), 3000);
+      
+      console.log('✅ Preferences saved successfully');
       
       return { 
         success: true, 
-        message: 'Settings saved to your account and will sync across devices' 
+        message: 'Preferences saved successfully to device and account' 
       };
     } catch (err) {
-      setSyncStatus('error');
-      setTimeout(() => setSyncStatus('idle'), 5000);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 5000);
+      
+      console.error('❌ Failed to save preferences:', err.message);
       
       return { 
         success: false, 
-        message: err.message || 'Failed to save to account, but saved locally' 
+        message: err.message || 'Failed to save preferences. Please try again.' 
       };
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const syncFromProfile = async () => {
-    if (!isAuthenticated() || !token) {
-      return { success: false, message: 'Please log in to sync from your account' };
-    }
-
-    try {
-      setLoading(true);
-      setSyncStatus('syncing');
-      
-      const result = await loadFromProfile();
-      
-      if (result.success && result.data) {
-        const profileAppearance = validateAppearanceSettings(result.data);
-        setAppearance(profileAppearance);
-        setSaveMode('hybrid');
-        saveToLocalStorage({ ...profileAppearance, lastModified: result.lastModified });
-        setLastSynced(result.lastModified || new Date().toISOString());
-        setHasUnsavedChanges(false);
-        setSyncStatus('success');
-        
-        setTimeout(() => setSyncStatus('idle'), 3000);
-        
-        return { 
-          success: true, 
-          message: 'Settings synced from your account' 
-        };
-      } else {
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 5000);
-        
-        return { 
-          success: false, 
-          message: 'No saved settings found in your account' 
-        };
-      }
-    } catch (err) {
-      setSyncStatus('error');
-      setTimeout(() => setSyncStatus('idle'), 5000);
-      
-      return { 
-        success: false, 
-        message: err.message || 'Failed to sync from account' 
-      };
-    } finally {
-      setLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -531,17 +412,13 @@ export const ThemeProvider = ({ children }) => {
     updateStatusColor,
     resetToDefaults,
     getStatusColor,
-    saveToProfile,
-    syncFromProfile,
-    setSaveMode,
+    savePreferences,
     loading,
     error,
-    saveMode,
-    lastSynced,
     hasUnsavedChanges,
-    autoSaveEnabled,
-    setAutoSaveEnabled,
-    syncStatus,
+    isSaving,
+    lastSaved,
+    saveStatus,
   };
 
   return (

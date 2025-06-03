@@ -1,4 +1,4 @@
-// Updated server.js with working CORS configuration
+// Updated server.js with working CORS configuration and Job Finder routes
 
 const express = require('express');
 const dotenv = require('dotenv');
@@ -17,7 +17,6 @@ dotenv.config({ path: '../.env' });
 connectDB();
 
 const app = express();
-
 
 // Build allowed origins array
 const allowedOrigins = [
@@ -108,20 +107,49 @@ if (process.env.NODE_ENV === 'development') {
 // API Routes
 console.log('Loading API routes...');
 
+// Existing routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/resumes', require('./routes/resumes'));
+
+// NEW: Job Finder routes
+try {
+  app.use('/api/job-finder', require('./routes/jobFinder'));
+  console.log('✅ Job Finder routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load Job Finder routes:', error.message);
+  console.log('📝 Make sure you have created the following files:');
+  console.log('   - backend/routes/jobFinder.js');
+  console.log('   - backend/controllers/jobFinderController.js');
+  console.log('   - backend/models/SavedJob.js');
+}
 
 console.log('API routes loaded');
 
 // Serve static files from uploads directory
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// API route debugging middleware
+app.use('/api/*', (req, res, next) => {
+  console.log(`🔍 API Request: ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Catch-all for undefined routes
 app.use('*', (req, res) => {
+  console.log(`❌ Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
-    error: `Route ${req.originalUrl} not found`
+    error: `Route ${req.originalUrl} not found`,
+    availableRoutes: [
+      'GET /health',
+      'POST /api/auth/login',
+      'POST /api/auth/register',
+      'GET /api/jobs',
+      'GET /api/job-finder/search',
+      'POST /api/job-finder/saved',
+      'GET /api/job-finder/saved'
+    ]
   });
 });
 
@@ -135,7 +163,22 @@ const server = app.listen(PORT, () => {
   console.log(`Server started successfully!`);
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`API Base URL: http://localhost:${PORT}/api`);
+  console.log(`Job Finder API: http://localhost:${PORT}/api/job-finder`);
   console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
+  
+  // Test if Job Finder routes are working
+  console.log('\n🧪 Testing Job Finder routes...');
+  const testRoutes = [
+    '/api/job-finder/search',
+    '/api/job-finder/saved'
+  ];
+  
+  testRoutes.forEach(route => {
+    console.log(`   - ${route} ${app._router.stack.some(layer => 
+      layer.route && layer.route.path === route || 
+      layer.regexp.test(route)
+    ) ? '✅' : '❌'}`);
+  });
 });
 
 // Handle unhandled promise rejections
