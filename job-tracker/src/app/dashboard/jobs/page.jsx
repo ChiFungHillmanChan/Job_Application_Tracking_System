@@ -1,4 +1,3 @@
-// app/dashboard/jobs/page.jsx
 'use client';
 
 import { useState, useEffect } from 'react';

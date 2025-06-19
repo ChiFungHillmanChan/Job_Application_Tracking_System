@@ -104,7 +104,6 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   ];
 
-
   try {
     const storedUsers = localStorage.getItem(MOCK_USERS_KEY);
     if (storedUsers) {
@@ -305,6 +304,79 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     }
   };
 
+  // NEW: Sample job creation for new users
+  const initializeSampleJobsForNewUser = (userId) => {
+    const mockJobs = getMockJobs();
+    const userJobs = mockJobs.filter(job => job.user === userId);
+    
+    // If no jobs exist for this user, create some sample data
+    if (userJobs.length === 0 && process.env.NODE_ENV === 'development') {
+      console.log(`Creating sample jobs for new user: ${userId}`);
+      
+      const sampleJobs = [
+        {
+          _id: `job-sample-1-${Date.now()}`,
+          user: userId,
+          company: 'Tech Solutions Ltd',
+          position: 'Senior Software Engineer',
+          location: 'London, UK',
+          status: 'Applied',
+          jobType: 'full-time',
+          applicationDate: new Date(Date.now() - 86400000 * 7).toISOString(), // 7 days ago
+          url: 'https://example.com/job1',
+          salary: '£70,000 - £90,000',
+          description: 'Exciting opportunity to work with cutting-edge technology.',
+          notes: 'Great company culture, looking forward to hearing back.',
+          tags: ['JavaScript', 'React', 'Node.js'],
+          createdAt: new Date(Date.now() - 86400000 * 14).toISOString(),
+          updatedAt: new Date(Date.now() - 86400000 * 7).toISOString()
+        },
+        {
+          _id: `job-sample-2-${Date.now() + 1}`,
+          user: userId,
+          company: 'StartupXYZ',
+          position: 'Frontend Developer',
+          location: 'Remote',
+          status: 'Interview',
+          jobType: 'full-time',
+          applicationDate: new Date(Date.now() - 86400000 * 3).toISOString(), // 3 days ago
+          url: 'https://example.com/job2',
+          salary: '£50,000 - £65,000',
+          description: 'Join our fast-growing startup.',
+          notes: 'Phone screen went well, technical interview scheduled.',
+          tags: ['Vue.js', 'TypeScript'],
+          createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
+          updatedAt: new Date(Date.now() - 86400000 * 1).toISOString()
+        },
+        {
+          _id: `job-sample-3-${Date.now() + 2}`,
+          user: userId,
+          company: 'Big Enterprise',
+          position: 'Full Stack Developer',
+          location: 'Manchester, UK',
+          status: 'Saved',
+          jobType: 'permanent',
+          applicationDate: null,
+          url: 'https://example.com/job3',
+          salary: '£60,000 - £80,000',
+          description: 'Work on enterprise-level applications.',
+          notes: 'Need to tailor resume before applying.',
+          tags: ['Java', 'Spring', 'Angular'],
+          createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+          updatedAt: new Date(Date.now() - 86400000 * 5).toISOString()
+        }
+      ];
+      
+      const allJobs = [...mockJobs, ...sampleJobs];
+      saveMockJobs(allJobs);
+      console.log(`✅ Created ${sampleJobs.length} sample jobs for user ${userId}`);
+      
+      return sampleJobs;
+    }
+    
+    return userJobs;
+  };
+
 api.put = async function(url, data, config) {
   try {
     const response = await originalPut.call(this, url, data, config);
@@ -467,82 +539,97 @@ api.put = async function(url, data, config) {
         console.warn(`API call to ${url} failed, using mock data`, error);
       }
       
+      // ENHANCED: Jobs endpoint with sample data creation
       if (url === '/jobs' || url.startsWith('/jobs?')) {
-          console.info('Using mock data for get jobs');
-          const userId = getCurrentUserId();
-          if (!userId) {
-            throw { 
-              response: { 
-                status: 401, 
-                data: { success: false, error: 'Not authorized' } 
-              } 
-            };
-          }
-
-          // Parse query parameters
-          const urlObj = new URL('http://localhost' + url);
-          const params = urlObj.searchParams;
-          const status = params.get('status');
-          const jobType = params.get('jobType');
-          const search = params.get('search');
-          const sortBy = params.get('sortBy') || 'updatedAt';
-          const sortOrder = params.get('sortOrder') || 'desc';
-
-          // Get all jobs for user
-          const mockJobs = getMockJobs();
-          let userJobs = mockJobs.filter(job => job.user === userId);
-
-          // Apply filters
-          if (status) {
-            userJobs = userJobs.filter(job => job.status === status);
-          }
-          
-          if (jobType) {
-            userJobs = userJobs.filter(job => job.jobType === jobType);
-          }
-          
-          if (search) {
-            const searchLower = search.toLowerCase();
-            userJobs = userJobs.filter(job => 
-              job.company.toLowerCase().includes(searchLower) ||
-              job.position.toLowerCase().includes(searchLower) ||
-              job.location.toLowerCase().includes(searchLower) ||
-              (job.notes && job.notes.toLowerCase().includes(searchLower)) ||
-              (job.tags && job.tags.some(tag => tag.toLowerCase().includes(searchLower)))
-            );
-          }
-
-          // Apply sorting
-          userJobs.sort((a, b) => {
-            let aValue = a[sortBy];
-            let bValue = b[sortBy];
-            
-            // Handle date sorting
-            if (sortBy.includes('Date') || sortBy.includes('At')) {
-              aValue = new Date(aValue).getTime();
-              bValue = new Date(bValue).getTime();
-            }
-            
-            // Handle string sorting
-            if (typeof aValue === 'string' && typeof bValue === 'string') {
-              aValue = aValue.toLowerCase();
-              bValue = bValue.toLowerCase();
-            }
-            
-            if (sortOrder === 'desc') {
-              return bValue > aValue ? 1 : bValue < aValue ? -1 : 0;
-            } else {
-              return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-            }
-          });
-
-          return {
-            data: {
-              success: true,
-              count: userJobs.length,
-              data: userJobs
-            }
+        console.info('Using mock data for get jobs');
+        const userId = getCurrentUserId();
+        if (!userId) {
+          throw { 
+            response: { 
+              status: 401, 
+              data: { success: false, error: 'Not authorized' } 
+            } 
           };
+        }
+
+        // Initialize sample jobs for new users
+        initializeSampleJobsForNewUser(userId);
+
+        // Parse query parameters
+        const urlObj = new URL('http://localhost' + url);
+        const params = urlObj.searchParams;
+        const status = params.get('status');
+        const jobType = params.get('jobType');
+        const search = params.get('search');
+        const sortBy = params.get('sortBy') || 'updatedAt';
+        const sortOrder = params.get('sortOrder') || 'desc';
+
+        // Get all jobs for user
+        const mockJobs = getMockJobs();
+        let userJobs = mockJobs.filter(job => job.user === userId);
+
+        console.log(`Found ${userJobs.length} jobs for user ${userId}`);
+
+        // Apply filters
+        if (status) {
+          userJobs = userJobs.filter(job => job.status === status);
+          console.log(`Filtered by status '${status}': ${userJobs.length} jobs`);
+        }
+        
+        if (jobType) {
+          userJobs = userJobs.filter(job => job.jobType === jobType);
+          console.log(`Filtered by jobType '${jobType}': ${userJobs.length} jobs`);
+        }
+        
+        if (search) {
+          const searchLower = search.toLowerCase();
+          userJobs = userJobs.filter(job => 
+            job.company.toLowerCase().includes(searchLower) ||
+            job.position.toLowerCase().includes(searchLower) ||
+            job.location.toLowerCase().includes(searchLower) ||
+            (job.notes && job.notes.toLowerCase().includes(searchLower)) ||
+            (job.tags && job.tags.some(tag => tag.toLowerCase().includes(searchLower)))
+          );
+          console.log(`Filtered by search '${search}': ${userJobs.length} jobs`);
+        }
+
+        // Apply sorting
+        userJobs.sort((a, b) => {
+          let aValue = a[sortBy];
+          let bValue = b[sortBy];
+          
+          // Handle date sorting
+          if (sortBy.includes('Date') || sortBy.includes('At')) {
+            aValue = new Date(aValue || 0).getTime();
+            bValue = new Date(bValue || 0).getTime();
+          }
+          
+          // Handle string sorting
+          if (typeof aValue === 'string' && typeof bValue === 'string') {
+            aValue = aValue.toLowerCase();
+            bValue = bValue.toLowerCase();
+          }
+          
+          // Handle undefined/null values
+          if (aValue === undefined || aValue === null) aValue = '';
+          if (bValue === undefined || bValue === null) bValue = '';
+          
+          if (sortOrder === 'desc') {
+            return bValue > aValue ? 1 : bValue < aValue ? -1 : 0;
+          } else {
+            return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+          }
+        });
+
+        console.log(`Final sorted jobs: ${userJobs.length}`);
+
+        return {
+          data: {
+            success: true,
+            count: userJobs.length,
+            data: userJobs
+          }
+        };
       }
       
       if (url === '/jobs/stats') {
@@ -556,6 +643,9 @@ api.put = async function(url, data, config) {
             } 
           };
         }
+
+        // Initialize sample jobs for new users
+        initializeSampleJobsForNewUser(userId);
 
         const mockJobs = getMockJobs();
         const userJobs = mockJobs.filter(job => job.user === userId);
@@ -597,6 +687,9 @@ api.put = async function(url, data, config) {
             } 
           };
         }
+
+        // Initialize sample jobs for new users
+        initializeSampleJobsForNewUser(userId);
 
         // Parse limit parameter
         const urlObj = new URL('http://localhost' + url);
@@ -646,7 +739,7 @@ api.put = async function(url, data, config) {
       }
       
       if (url.startsWith('/jobs/') && !url.includes('/stats') && !url.includes('/recent')) {
-        console.info('Using mock data for get jobs');
+        console.info('Using mock data for individual job');
         const userId = getCurrentUserId();
         if (!userId) {
           throw { 
@@ -657,68 +750,28 @@ api.put = async function(url, data, config) {
           };
         }
 
-        // Parse query parameters
-        const urlObj = new URL('http://localhost' + url);
-        const params = urlObj.searchParams;
-        const status = params.get('status');
-        const jobType = params.get('jobType');
-        const search = params.get('search');
-        const sortBy = params.get('sortBy') || 'updatedAt';
-        const sortOrder = params.get('sortOrder') || 'desc';
-
-        // Get all jobs for user
+        // Extract job ID from URL
+        const jobId = url.split('/')[2];
+        
         const mockJobs = getMockJobs();
-        let userJobs = mockJobs.filter(job => job.user === userId);
-
-        // Apply filters
-        if (status) {
-          userJobs = userJobs.filter(job => job.status === status);
-        }
+        const job = mockJobs.find(j => j._id === jobId && j.user === userId);
         
-        if (jobType) {
-          userJobs = userJobs.filter(job => job.jobType === jobType);
+        if (!job) {
+          throw {
+            response: {
+              status: 404,
+              data: {
+                success: false,
+                error: 'Job not found'
+              }
+            }
+          };
         }
-        
-        if (search) {
-          const searchLower = search.toLowerCase();
-          userJobs = userJobs.filter(job => 
-            job.company.toLowerCase().includes(searchLower) ||
-            job.position.toLowerCase().includes(searchLower) ||
-            job.location.toLowerCase().includes(searchLower) ||
-            (job.notes && job.notes.toLowerCase().includes(searchLower)) ||
-            (job.tags && job.tags.some(tag => tag.toLowerCase().includes(searchLower)))
-          );
-        }
-
-        // Apply sorting
-        userJobs.sort((a, b) => {
-          let aValue = a[sortBy];
-          let bValue = b[sortBy];
-          
-          // Handle date sorting
-          if (sortBy.includes('Date') || sortBy.includes('At')) {
-            aValue = new Date(aValue).getTime();
-            bValue = new Date(bValue).getTime();
-          }
-          
-          // Handle string sorting
-          if (typeof aValue === 'string' && typeof bValue === 'string') {
-            aValue = aValue.toLowerCase();
-            bValue = bValue.toLowerCase();
-          }
-          
-          if (sortOrder === 'desc') {
-            return bValue > aValue ? 1 : bValue < aValue ? -1 : 0;
-          } else {
-            return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-          }
-        });
 
         return {
           data: {
             success: true,
-            count: userJobs.length,
-            data: userJobs
+            data: job
           }
         };
       }
@@ -1240,7 +1293,7 @@ api.put = async function(url, data, config) {
           position: data.position,
           location: data.location,
           status: data.status,
-          jobType: data.jobType || 'Full-time',
+          jobType: data.jobType || 'full-time',
           applicationDate: data.applicationDate || new Date().toISOString(),
           url: data.url || '',
           salary: data.salary || '',
