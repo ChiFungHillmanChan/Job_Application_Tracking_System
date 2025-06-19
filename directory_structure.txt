@@ -9,41 +9,54 @@
 │   │   ├── controllers
 │   │   │   ├── authController.js
 │   │   │   ├── jobController.js
-│   │   │   └── resumeController.js
-│   │   ├── debug-cors-server.js
-│   │   ├── env-check.js
-│   │   ├── full-debug-server.js
-│   │   ├── import-test.js
-│   │   ├── inspect-path-to-regexp.js
+│   │   │   ├── jobFinderController.js
+│   │   │   ├── resumeController.js
+│   │   │   ├── subscriptionController.js
+│   │   │   └── themeController.js
 │   │   ├── logs
 │   │   │   ├── combined.log
 │   │   │   └── error.log
 │   │   ├── middleware
 │   │   │   ├── auth.js
-│   │   │   └── error.js
+│   │   │   ├── error.js
+│   │   │   └── premiumRequired.js
 │   │   ├── models
+│   │   │   ├── CustomTheme.js
 │   │   │   ├── Job.js
 │   │   │   ├── Resume.js
+│   │   │   ├── SavedJob.js
 │   │   │   └── User.js
 │   │   ├── package-lock.json
 │   │   ├── package.json
-│   │   ├── route-by-route-server.js
-│   │   ├── route-debug.server.js
-│   │   ├── route-file-checker.js
 │   │   ├── routes
+│   │   │   ├── admin.js
 │   │   │   ├── auth.js
+│   │   │   ├── jobFinder.js
 │   │   │   ├── jobs.js
-│   │   │   └── resumes.js
+│   │   │   ├── resumes.js
+│   │   │   ├── subscription.js
+│   │   │   └── theme.js
+│   │   ├── scripts
+│   │   │   ├── checkBackend.js
+│   │   │   ├── createSuperUser.js
+│   │   │   ├── migrateResumes.js
+│   │   │   └── upgradeUser.js
 │   │   ├── server.js
-│   │   ├── simple-cors-test.js
-│   │   ├── test-server.js
-│   │   ├── trace-error-source.js
-│   │   ├── ultra-minimal-server.js
-│   │   ├── utils
-│   │   │   ├── logger.js
-│   │   │   ├── sendEmail.js
-│   │   │   └── tokenManager.js
-│   │   └── version-check.js
+│   │   ├── uploads
+│   │   │   └── resumes
+│   │   │       ├── 0229a193-749f-4535-a07c-12c8c6aef56b.pdf
+│   │   │       ├── 12846b8b-e904-40d5-8fc4-9df8d801b0ef.pdf
+│   │   │       ├── 2fb92f1b-69d9-4124-85a7-cd5603789862.pdf
+│   │   │       ├── 48ebc04a-0cfa-458d-b502-01e92378e77a.pdf
+│   │   │       ├── ac92f2b2-60bc-4ab9-b5d5-308d582a02fb.pdf
+│   │   │       ├── b839cc76-bd6c-4ad9-848a-c0090e524d77.pdf
+│   │   │       ├── dffd61c7-15c0-48fc-9fdf-69407b9c19a5.pdf
+│   │   │       └── f7c34c6e-4c14-4dc6-a2c7-54d5be7b6131.pdf
+│   │   └── utils
+│   │       ├── logger.js
+│   │       ├── sendEmail.js
+│   │       ├── subscriptionChecker.js
+│   │       └── tokenManager.js
 │   ├── eslint.config.mjs
 │   ├── jsconfig.json
 │   ├── next.config.js
@@ -51,6 +64,7 @@
 │   ├── package.json
 │   ├── postcss.config.js
 │   ├── postcss.config.mjs
+│   ├── preference.txt
 │   ├── public
 │   │   ├── file.svg
 │   │   ├── globe.svg
@@ -85,8 +99,12 @@
 │   │   │   │   │   └── page.jsx
 │   │   │   │   └── resetpassword
 │   │   │   │       └── [token]
-│   │   │   │           └── pages.jsx
+│   │   │   │           └── page.jsx
 │   │   │   ├── dashboard
+│   │   │   │   ├── job-finder
+│   │   │   │   │   ├── page.jsx
+│   │   │   │   │   └── saved
+│   │   │   │   │       └── page.jsx
 │   │   │   │   ├── jobs
 │   │   │   │   │   ├── new
 │   │   │   │   │   │   └── page.jsx
@@ -101,25 +119,46 @@
 │   │   │   ├── page.jsx
 │   │   │   ├── resume
 │   │   │   │   └── [id]
-│   │   │   │       └── page.jsx
+│   │   │   │       ├── download
+│   │   │   │       │   └── route.js
+│   │   │   │       ├── page.jsx
+│   │   │   │       └── preview
+│   │   │   │           └── route.js
 │   │   │   └── settings
 │   │   │       ├── account
 │   │   │       │   └── page.jsx
 │   │   │       ├── appearance
-│   │   │       │   └── page.jsx
+│   │   │       │   ├── advanced
+│   │   │       │   │   └── page.jsx
+│   │   │       │   ├── page.jsx
+│   │   │       │   └── themes
+│   │   │       │       └── page.jsx
 │   │   │       ├── page.jsx
 │   │   │       ├── profile
 │   │   │       │   └── page.jsx
-│   │   │       └── resumes
+│   │   │       ├── resumes
+│   │   │       │   └── page.jsx
+│   │   │       └── subscription
 │   │   │           └── page.jsx
 │   │   ├── components
 │   │   │   ├── authWrapper.jsx
+│   │   │   ├── BillingHistory.jsx
 │   │   │   ├── DashboardError.jsx
 │   │   │   ├── forms
 │   │   │   │   ├── ForgotPasswordForm.jsx
 │   │   │   │   ├── JobForm.jsx
 │   │   │   │   ├── LoginForm.jsx
 │   │   │   │   └── RegisterForm.jsx
+│   │   │   ├── job-finder
+│   │   │   │   ├── JobFinderExportJob.jsx
+│   │   │   │   ├── JobFinderFilters.jsx
+│   │   │   │   ├── JobFinderJobCard.jsx
+│   │   │   │   ├── JobFinderJobDetail.jsx
+│   │   │   │   ├── JobFinderJobList.jsx
+│   │   │   │   ├── JobFinderLayout.jsx
+│   │   │   │   ├── JobFinderMap.jsx
+│   │   │   │   ├── JobFinderSavedJobs.jsx
+│   │   │   │   └── JobFinderSearch.jsx
 │   │   │   ├── layout
 │   │   │   │   ├── Footer.jsx
 │   │   │   │   ├── Header.jsx
@@ -128,15 +167,41 @@
 │   │   │   └── ui
 │   │   │       ├── Button.jsx
 │   │   │       ├── Card.jsx
+│   │   │       ├── ColorPicker.jsx
 │   │   │       ├── Input.jsx
+│   │   │       ├── JobTypeSelector.jsx
+│   │   │       ├── LeafletMap.jsx
+│   │   │       ├── LocationInput.jsx
+│   │   │       ├── premium
+│   │   │       │   ├── AdvancedColorPicker.jsx
+│   │   │       │   ├── CustomCSSEditor.jsx
+│   │   │       │   ├── FontFamilySelector.jsx
+│   │   │       │   ├── GranularSlider.jsx
+│   │   │       │   └── PremiumFeatureLock.jsx
+│   │   │       ├── SalaryRangeSlider.jsx
 │   │   │       └── Select.jsx
+│   │   ├── config
+│   │   ├── contexts
+│   │   │   └── AppearanceContext.js
 │   │   ├── lib
 │   │   │   ├── api.js
+│   │   │   ├── appearanceUtils.js
 │   │   │   ├── authDebug.js
+│   │   │   ├── fontLibrary.js
 │   │   │   ├── hooks
-│   │   │   │   └── useAuth.js
+│   │   │   │   ├── useAuth.js
+│   │   │   │   ├── useJobSearch.js
+│   │   │   │   ├── useLocation.js
+│   │   │   │   ├── useSavedJobs.js
+│   │   │   │   └── useTheme.js
+│   │   │   ├── jobFinderCache.js
+│   │   │   ├── jobFinderService.js
 │   │   │   ├── jobService.js
+│   │   │   ├── locationService.js
+│   │   │   ├── premiumTheme.js
 │   │   │   ├── resumeService.js
+│   │   │   ├── subscriptionService.js
+│   │   │   ├── themeUtils.js
 │   │   │   ├── utils
 │   │   │   └── withAuth.js
 │   │   └── styles
@@ -144,4 +209,4 @@
 │   └── tailwind.config.js
 └── README.md
 
-47 directories, 98 files
+61 directories, 149 files
