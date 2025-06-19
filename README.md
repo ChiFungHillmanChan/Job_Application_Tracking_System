@@ -1,278 +1,559 @@
+<a id="top"></a>
 # Job Application Tracking System
 
-A comprehensive web application for tracking job applications throughout the hiring process. Built with React.js/Next.js frontend and Node.js/Express/MongoDB backend.
+A comprehensive full-stack web application that helps job seekers organize, track, and manage their job applications throughout the entire hiring process. Built with modern web technologies and featuring both free and premium subscription tiers with Stripe integration.
 
-![Job Tracker Dashboard](https://via.placeholder.com/800x450?text=Job+Tracker+Dashboard)
+## 📑 Table of Contents
 
-## Features
+### 🚀 Getting Started
+- [What This Project Does](#what-this-project-does)
+- [Key Features](#key-features)
+- [Technology Stack](#technology-stack)
+- [Prerequisites](#prerequisites)
+- [Installation & Setup](#installation--setup)
 
-- **User Authentication**: Secure registration and login with email/password, Google, and Apple sign-in options
-- **Dashboard**: Intuitive interface to track all job applications in one place
-- **Application Management**: Add, edit, and delete job applications with comprehensive details
-- **Status Tracking**: Monitor applications through 8 predefined statuses (Saved, Applied, Phone Screen, Interview, Technical Assessment, Offer, Rejected, Withdrawn)
-- **Resume Management**: Upload and manage multiple resume versions
-- **Settings**: Customize themes, notification preferences, and account settings
-- **Responsive Design**: Fully functional on both desktop and mobile devices
-- **Future AI Enhancements**: Architecture designed to support AI analysis of applications, resumes, and job descriptions
+### 💎 Features & Pricing
+- [Subscription Tiers & Pricing](#subscription-tiers--pricing)
+- [Feature Limitations](#feature-limitations-without-configuration)
+
+### 🔧 Development & Deployment
+- [Production Deployment](#production-deployment)
+- [API Documentation](#api-documentation)
+- [Development Scripts](#development-scripts)
+- [Security Features](#security-features)
+
+### 🛠 Support & Contributing
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Support & Contact](#support--contact)
+
+---
+
+## What This Project Does
+
+This application solves the common problem of job search chaos by providing a centralized platform for job seekers to:
+
+- **Track Applications**: Monitor job applications through 8 different stages from saved to offer
+- **Discover Jobs**: Search and save jobs from external APIs (Reed, Adzuna, Indeed)
+- **Manage Resumes**: Upload, organize, and link multiple resume versions to applications
+- **Schedule Interviews**: Coordinate interview rounds with detailed notes and feedback
+- **Analyze Progress**: Visualize job search statistics and track success metrics
+- **Customize Experience**: Personalize themes, layouts, and appearance settings
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
+
+## Key Features
+
+### Authentication & Security
+- **JWT-based Authentication**: Secure token-based login system
+- **Password Reset**: Email-based password recovery (requires SMTP configuration)
+- **Role-based Access**: User, admin, and superadmin roles
+- **Data Protection**: Helmet.js security headers and CORS protection
+- **Input Validation**: Comprehensive data validation with Zod schemas
+
+### Comprehensive Job Tracking
+- **8 Application Statuses**: 
+  - Saved → Applied → Phone Screen → Interview → Technical Assessment → Offer → Rejected/Withdrawn
+- **Rich Job Details**: Company info, position, location, salary, job type (permanent/contract/temporary), work arrangement (onsite/remote/hybrid)
+- **Activity Timeline**: Automatic logging of all status changes and interactions
+- **Interview Management**: Schedule multiple interview rounds with interviewer details, notes, and outcomes
+- **Contact Database**: Store recruiter and hiring manager information
+- **Document Linking**: Attach resumes, cover letters, and other documents to applications
+- **Follow-up Reminders**: Track important dates and deadlines
+
+### Integrated Job Finder
+- **External API Integration**: Search jobs from Reed, Adzuna, and other major job boards
+- **Advanced Filtering**: Filter by location, salary range, job type, and work arrangement
+- **Save for Later**: Bookmark interesting positions before applying (free users: 5 max, premium: unlimited)
+- **One-click Import**: Convert saved jobs to tracked applications
+- **Map Integration**: Location-based job search with geographical filtering
+- **Rate Limiting**: 100 searches per 15 minutes, 20 saves per minute
+
+### Resume Management System
+- **Multiple Versions**: Upload and organize different resumes for different roles
+- **File Format Support**: PDF, DOC, and DOCX (5MB max per file)
+- **Default Resume**: Mark primary resume for quick application linking
+- **Preview & Download**: View resumes directly in browser or download
+- **Application Tracking**: See which resume was used for each application
+- **Storage Limits**: Free (8 resumes max), Premium (unlimited)
+
+### Advanced Customization
+- **Theme System**: Light, dark, and system-adaptive themes
+- **Color Schemes**: 5 professional color palettes (blue, green, purple, red, orange)
+- **Layout Density**: Compact, default, and comfortable spacing options
+- **Typography**: Small, default, and large font size options
+- **CSS Custom Properties**: Dynamic theming with CSS variables
+- **Premium Styling**: Custom CSS editor and advanced design controls
+
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
+
+## Subscription Tiers & Pricing
+
+#### Free Tier (£0/month)
+**Limitations:**
+- **5 saved jobs maximum**
+- **100 job applications maximum** 
+- **8 resume uploads maximum**
+- **Basic themes only** (no custom colors/CSS)
+- **Standard support**
+- **No email configuration** = no password reset emails
+- **No external API keys** = no job finder functionality
+
+#### Plus Tier (£8.88/month or £74.77/year)
+**Everything in Free, plus:**
+- **Unlimited saved jobs**
+- **Unlimited job applications**
+- **Unlimited resume uploads**
+- **Custom color schemes**
+- **Advanced typography options**
+- **Granular spacing controls**
+- **Theme export functionality**
+- **Google Fonts integration**
+- **Priority email support**
+
+#### Pro Tier (£38.88/month or £327.34/year)
+**Everything in Plus, plus:**
+- **Custom CSS editor**
+- **Component-level theming**
+- **AI-powered features** (when available)
+- **Personal consultation sessions**
+- **Beta feature access**
+- **Team sharing capabilities**
+- **Font upload functionality**
+- **API access**
+- **White-labeling options**
+- **Dedicated support**
+
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
 
 ## Technology Stack
 
 ### Frontend
-- **Next.js**: React framework with server-side rendering
-- **React**: JavaScript library for building user interfaces
-- **Tailwind CSS**: Utility-first CSS framework
-- **Axios**: Promise-based HTTP client
+- **Next.js 15.3.2** - React framework with App Router
+- **React 19.0.0** - Latest UI library with concurrent features
+- **Tailwind CSS 3.3.3** - Utility-first CSS framework with custom plugins
+- **Headless UI 2.2.3** - Unstyled accessible UI components
+- **Heroicons 2.2.0** - Beautiful hand-crafted SVG icons
+- **React Hook Form 7.56.4** - Performant forms with easy validation
+- **Zod 3.25.3** - TypeScript-first schema validation
+- **Axios 1.9.0** - Promise-based HTTP client
 
 ### Backend
-- **Node.js**: JavaScript runtime
-- **Express**: Web server framework
-- **MongoDB**: NoSQL database
-- **Mongoose**: MongoDB object modeling
-- **JWT**: Token-based authentication
+- **Node.js** - JavaScript runtime environment
+- **Express.js 4.19.2** - Minimal web application framework
+- **MongoDB** - NoSQL document database
+- **Mongoose 8.15.0** - Elegant MongoDB object modeling
+- **JWT (jsonwebtoken 9.0.2)** - Stateless authentication
+- **bcryptjs 3.0.2** - Password hashing
+- **Multer** - File upload middleware
+- **Helmet 8.1.0** - Security middleware
+- **Morgan 1.10.0** - HTTP request logger
+- **Winston 3.17.0** - Professional logging library
+- **Nodemailer 7.0.3** - Email sending functionality
+- **Stripe 18.1.1** - Payment processing
+- **CORS 2.8.5** - Cross-origin resource sharing
 
-### DevOps
-- **Git**: Version control
-- **npm**: Package management
+### Development Tools
+- **ESLint 9** - Code linting and formatting
+- **PostCSS 8.4.26** - CSS processing
+- **Autoprefixer 10.4.14** - CSS vendor prefixing
+- **Nodemon 3.1.10** - Development auto-reloading
 
-## Project Structure
-
-```
-job-tracker/
-├── src/                        # Frontend source code
-│   ├── app/                    # Next.js app directory
-│   │   ├── layout.jsx          # Root layout component
-│   │   ├── page.jsx            # Home page
-│   │   ├── dashboard/          # Dashboard pages
-│   │   ├── auth/               # Authentication pages
-│   │   ├── settings/           # Settings pages
-│   ├── components/             # Reusable React components
-│   │   ├── ui/                 # UI components
-│   │   ├── layout/             # Layout components
-│   │   ├── forms/              # Form components
-│   ├── lib/                    # Frontend utilities
-│   │   ├── api.js              # API client
-│   │   ├── hooks/              # Custom React hooks
-│   │   ├── utils/              # Utility functions
-│   ├── styles/                 # Global styles
-│   │   ├── globals.css         # Global CSS
-├── backend/                    # Backend source code
-│   ├── server.js               # Express server entry point
-│   ├── app.js                  # Express application setup
-│   ├── config/                 # Configuration files
-│   │   ├── db.js               # Database configuration
-│   │   ├── env.js              # Environment variables
-│   ├── models/                 # Mongoose models
-│   │   ├── User.js             # User model
-│   │   ├── Job.js              # Job application model
-│   │   ├── Resume.js           # Resume model
-│   ├── controllers/            # Request handlers
-│   │   ├── authController.js   # Authentication controllers
-│   │   ├── jobController.js    # Job application controllers
-│   ├── routes/                 # API routes
-│   │   ├── auth.js             # Authentication routes
-│   │   ├── jobs.js             # Job application routes
-│   ├── middleware/             # Express middleware
-│   │   ├── auth.js             # Authentication middleware
-│   │   ├── error.js            # Error handling middleware
-│   ├── utils/                  # Utility functions
-│   │   ├── logger.js           # Logging utility
-├── .env                        # Environment variables
-├── .gitignore                  # Git ignore file
-├── package.json                # Project dependencies
-├── tailwind.config.js          # Tailwind CSS configuration
-├── next.config.js              # Next.js configuration
-```
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
-- Node.js (v16.8.0 or higher)
-- npm (v8.0.0 or higher)
-- MongoDB (v5.0.0 or higher)
-- Git
+Before installation, ensure you have:
 
-## Installation
+- **Node.js** v16.8.0 or higher
+- **npm** v8.0.0 or higher  
+- **MongoDB** v5.0.0 or higher
+- **Git** for version control
 
-1. **Clone the repository**
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
 
-```bash
-git clone https://github.com/yourusername/job-tracker.git
-cd job-tracker
-```
+## Installation & Setup
 
-2. **Install dependencies**
+### 1. Clone the Repository
 
 ```bash
-npm install
+git clone https://github.com/ChiFungHillmanChan/Job_Application_Tracking_System.git
+cd Job_Application_Tracking_System
 ```
 
-3. **Set up environment variables**
+### 2. Install All Dependencies
 
-Create a `.env` file in the root directory with the following variables:
+```bash
+# Install both frontend and backend dependencies
+npm run install:all
 
+# Or install separately:
+npm install                    # Frontend dependencies
+cd backend && npm install      # Backend dependencies
 ```
-# Frontend environment variables
-NEXT_PUBLIC_API_URL=http://localhost:5000/api
 
-# Backend environment variables
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/job-tracker
-JWT_SECRET=your_jwt_secret_key_here
+### 3. Environment Configuration
+
+Create a `.env` file in the **root directory**:
+
+```env
+# ===== REQUIRED CONFIGURATION =====
+# Server Settings
+PORT=5001
 NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
+
+# Database (REQUIRED)
+MONGODB_URI=mongodb://localhost:27017/job-tracker
+
+# Authentication (REQUIRED - use a strong random string)
+JWT_SECRET=your_super_secure_jwt_secret_key_here_min_32_chars
+JWT_EXPIRE=30d
+
+# ===== OPTIONAL CONFIGURATIONS =====
+# Email Service (Required for password reset functionality)
+# Without these, users CANNOT reset passwords or receive notifications
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-specific-password
+FROM_NAME=JobTracker
+FROM_EMAIL=noreply@yourjobtracker.com
+
+# External Job APIs (Required for Job Finder feature)
+# Without these, Job Finder will NOT work
+REED_API_KEY=your_reed_api_key_from_reed_co_uk
+ADZUNA_APP_ID=your_adzuna_app_id
+ADZUNA_APP_KEY=your_adzuna_app_key
+
+# Payment Processing (Required for premium subscriptions)
+# Without these, users CANNOT subscribe to premium plans
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+STRIPE_PREMIUM_MONTHLY_PRICE_ID=price_your_plus_monthly_price_id
+STRIPE_PREMIUM_ANNUAL_PRICE_ID=price_your_plus_annual_price_id
+STRIPE_ENTERPRISE_MONTHLY_PRICE_ID=price_your_pro_monthly_price_id
+STRIPE_ENTERPRISE_ANNUAL_PRICE_ID=price_your_pro_annual_price_id
+
+# Development Settings
+ALLOW_ADMIN_ROUTES=true
 ```
 
-Replace `your_jwt_secret_key_here` with a secure random string.
+### 4. Database Setup
 
-4. **Set up MongoDB**
-
-Ensure MongoDB is running on your system:
-
+**Option A: Local MongoDB**
 ```bash
-# Check if MongoDB is running
-mongod --version
+# Install MongoDB Community Edition
+# Ubuntu/Debian:
+sudo apt-get install -y mongodb
+sudo systemctl start mongod
+sudo systemctl enable mongod
+
+# macOS (using Homebrew):
+brew tap mongodb/brew
+brew install mongodb-community
+brew services start mongodb/brew/mongodb-community
+
+# Windows: Download from https://www.mongodb.com/try/download/community
 ```
 
-If you prefer to use Docker:
-
+**Option B: Docker**
 ```bash
-docker run -d -p 27017:27017 --name job-tracker-mongo mongo:latest
+# Run MongoDB in Docker
+docker run -d \
+  --name job-tracker-mongo \
+  -p 27017:27017 \
+  -v job-tracker-data:/data/db \
+  mongo:latest
+
+# Check if running
+docker ps
 ```
 
-## Running the Application
+**Option C: MongoDB Atlas (Cloud)**
+```env
+# Use cloud MongoDB (recommended for production)
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/job-tracker?retryWrites=true&w=majority
+```
 
-### Development Mode
-
-To run both frontend and backend in development mode:
+### 5. Start the Application
 
 ```bash
+# Run both frontend and backend simultaneously (recommended)
 npm run dev:both
-```
 
-Or run them separately:
-
-```bash
-# Frontend only
+# Or run separately:
+# Frontend only (http://localhost:3000)
 npm run dev
 
-# Backend only
+# Backend only (http://localhost:5001)
 npm run server
+
+# Check backend health
+npm run check:health
 ```
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5000/api
+**Application URLs:**
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:5001/api
+- **Health Check**: http://localhost:5001/health
 
-### Production Mode
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
 
+## Feature Limitations Without Configuration
+
+### Without Email Configuration (SMTP):
+- ❌ **Password reset emails won't work**
+- ❌ **Account verification emails disabled**
+- ❌ **Application notification emails disabled**
+- ❌ **Users stuck if they forget passwords**
+
+### Without External API Keys:
+- ❌ **Job Finder feature completely disabled**
+- ❌ **Cannot search Reed, Adzuna, or other job boards**
+- ❌ **Cannot save external job listings**
+- ❌ **Users limited to manual job entry only**
+
+### Without Stripe Configuration:
+- ❌ **Premium subscriptions unavailable**
+- ❌ **All users stuck on free tier limitations**
+- ❌ **No payment processing**
+- ❌ **Premium features inaccessible**
+
+### Free Tier User Limitations:
+- 📊 **Only 5 saved jobs** (vs unlimited premium)
+- 📝 **100 application limit** (vs unlimited premium)
+- 📄 **8 resume maximum** (vs unlimited premium)
+- 🎨 **Basic themes only** (no custom CSS/colors)
+- 💬 **Standard support** (no priority/dedicated support)
+
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
+
+## Production Deployment
+
+### Environment Setup
+```env
+NODE_ENV=production
+PORT=5001
+MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/job-tracker-prod
+JWT_SECRET=production_jwt_secret_min_64_chars_for_security
+FRONTEND_URL=https://yourjobtracker.com
+
+# Production SMTP (required)
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_USERNAME=apikey
+SMTP_PASSWORD=your_sendgrid_api_key
+
+# Production Stripe (required for billing)
+STRIPE_SECRET_KEY=sk_live_your_live_stripe_key
+STRIPE_WEBHOOK_SECRET=whsec_your_production_webhook_secret
+```
+
+### Build and Deploy
 ```bash
 # Build the frontend
 npm run build
 
-# Start the production server
+# Start production server
 npm start
 ```
 
-## API Endpoints
+## API Documentation
+
+### Health Check
+```
+GET    /health                     - Server health status
+```
 
 ### Authentication
+```
+POST   /api/auth/register          - Register new user
+POST   /api/auth/login             - User login  
+GET    /api/auth/me                - Get current user profile
+POST   /api/auth/forgotpassword    - Request password reset (requires SMTP)
+PUT    /api/auth/resetpassword/:token - Reset password
+GET    /api/auth/preferences       - Get user preferences
+PUT    /api/auth/preferences       - Update user preferences
+```
 
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login a user
-- `GET /api/auth/profile` - Get current user profile
-- `PUT /api/auth/profile` - Update user profile
+### Job Management
+```
+GET    /api/jobs                   - Get user's applications (paginated)
+POST   /api/jobs                   - Create new job application
+GET    /api/jobs/:id               - Get specific application
+PUT    /api/jobs/:id               - Update application
+DELETE /api/jobs/:id               - Delete application
+GET    /api/jobs/stats             - Get application statistics
+GET    /api/jobs/recent            - Get recent activity
+```
 
-### Job Applications
+### Resume Management
+```
+GET    /api/resumes                - Get user's resumes
+POST   /api/resumes                - Upload new resume (multipart/form-data)
+GET    /api/resumes/:id            - Get specific resume
+DELETE /api/resumes/:id            - Delete resume
+PUT    /api/resumes/:id/default    - Set as default resume
+GET    /api/resumes/:id/download   - Download resume file
+GET    /api/resumes/:id/preview    - Preview resume in browser
+```
 
-- `GET /api/jobs` - Get all jobs for the logged-in user
-- `POST /api/jobs` - Create a new job application
-- `GET /api/jobs/:id` - Get a specific job application
-- `PUT /api/jobs/:id` - Update a job application
-- `DELETE /api/jobs/:id` - Delete a job application
+### Job Finder (requires API keys)
+```
+GET    /api/job-finder/search      - Search external job boards (rate limited: 100/15min)
+POST   /api/job-finder/saved       - Save job for later (rate limited: 20/min)  
+GET    /api/job-finder/saved       - Get saved jobs
+DELETE /api/job-finder/saved/:id   - Remove saved job
+POST   /api/job-finder/import/:id  - Import saved job to tracker (premium)
+GET    /api/job-finder/stats       - Get job finder statistics
+```
 
-### Resumes
+### Subscription Management (requires Stripe)
+```
+GET    /api/subscription/current   - Get current subscription
+GET    /api/subscription/plans     - Get available plans
+POST   /api/subscription/create-checkout-session - Create Stripe checkout
+POST   /api/subscription/upgrade   - Handle successful upgrade
+POST   /api/subscription/cancel    - Cancel subscription
+GET    /api/subscription/usage     - Get usage statistics
+GET    /api/subscription/billing-history - Get billing history
+POST   /api/subscription/webhook   - Stripe webhook handler
+```
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
 
-- `GET /api/resumes` - Get all resumes for the logged-in user
-- `POST /api/resumes` - Upload a new resume
-- `GET /api/resumes/:id` - Get a specific resume
-- `DELETE /api/resumes/:id` - Delete a resume
-
-## Development Roadmap
-
-The project is being developed in 5 phases:
-
-### Phase 1: Project Setup ✓
-- Establish foundational architecture
-- Configure MongoDB
-- Set up project directories
-- Install dependencies
-- Create skeleton components and routing
-
-### Phase 2: Authentication System
-- Implement user registration and login
-- Integrate Google and Apple login
-- Create session management
-- Develop password reset
-- Implement user profiles
-
-### Phase 3: Settings Page Development
-- Design profile management interface
-- Create theme customization
-- Develop resume upload system
-- Implement password change
-- Design subscription plan management
-
-### Phase 4: Main Dashboard Implementation
-- Design job application tracking interface
-- Implement filtering system
-- Create job application entry system
-- Develop status tracking
-- Build resume version management
-
-### Phase 5: Future AI Enhancement Foundation
-- Design data structures for AI analysis
-- Establish API endpoints for AI integration
-- Create infrastructure for resume parsing
-- Implement framework for job description analysis
-
-## Testing
-
-The project includes unit, integration, and end-to-end tests:
+## Development Scripts
 
 ```bash
-# Run all tests
-npm test
+# Development
+npm run dev              # Start frontend only
+npm run server           # Start backend only  
+npm run dev:both         # Start both frontend and backend
+npm run dev:full         # Alternative command for both
 
-# Run unit tests
-npm run test:unit
+# Production
+npm run build            # Build frontend for production
+npm run start            # Start production server
 
-# Run integration tests
-npm run test:integration
-
-# Run end-to-end tests
-npm run test:e2e
+# Utilities
+npm run lint             # Run ESLint
+npm run install:all      # Install all dependencies
+npm run check:health     # Test backend connectivity
 ```
+
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
+
+## Security Features
+
+- **JWT Authentication**: Stateless token-based auth with configurable expiration
+- **Password Security**: bcrypt hashing with salt rounds
+- **Input Validation**: Zod schemas for type-safe validation
+- **File Upload Security**: File type and size restrictions (5MB max)
+- **Rate Limiting**: API endpoint protection (100 searches/15min, 20 saves/min)
+- **CORS Protection**: Configurable cross-origin policies
+- **Helmet.js**: Security headers (CSP, HSTS, etc.)
+- **Environment Security**: Sensitive config in environment variables
+- **Role-based Access**: User/admin/superadmin permission levels
+
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
+
+## Troubleshooting
+
+### Common Issues
+
+**Backend won't start:**
+```bash
+# Check if MongoDB is running
+mongo --eval "db.adminCommand('ismaster')"
+
+# Check if port 5001 is available
+lsof -i :5001
+
+# View detailed logs
+cd backend && npm run dev
+```
+
+**Frontend build fails:**
+```bash
+# Clear cache and reinstall
+rm -rf node_modules package-lock.json
+npm install
+
+# Check for version conflicts
+npm ls
+```
+
+**Email not working:**
+```bash
+# Test SMTP connection
+node -e "
+const nodemailer = require('nodemailer');
+const transporter = nodemailer.createTransporter({
+  host: 'your-smtp-host',
+  port: 587,
+  auth: { user: 'your-email', pass: 'your-password' }
+});
+transporter.verify().then(console.log).catch(console.error);
+"
+```
+
+**Job Finder not working:**
+```bash
+# Test API keys
+curl "https://www.reed.co.uk/api/1.0/search?keywords=developer" \
+  -H "Authorization: Basic $(echo -n 'YOUR_API_KEY:' | base64)"
+```
+
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests if applicable
+5. Commit your changes (`git commit -m 'Add some amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+### Development Guidelines
+- Follow the existing code style
+- Add JSDoc comments for new functions
+- Update README if adding new features
+- Test thoroughly before submitting
+
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
 
 ## Acknowledgments
 
-- [Next.js](https://nextjs.org/) - React framework
-- [Express](https://expressjs.com/) - Web framework for Node.js
-- [MongoDB](https://www.mongodb.com/) - NoSQL database
-- [Tailwind CSS](https://tailwindcss.com/) - CSS framework
-- [Font Awesome](https://fontawesome.com/) - Icons
+- **[Next.js](https://nextjs.org/)** - The React Framework for Production
+- **[Tailwind CSS](https://tailwindcss.com/)** - A utility-first CSS framework  
+- **[MongoDB](https://www.mongodb.com/)** - The application data platform
+- **[Express.js](https://expressjs.com/)** - Fast, unopinionated web framework
+- **[Stripe](https://stripe.com/)** - Online payment processing
+- **[Heroicons](https://heroicons.com/)** - Beautiful hand-crafted SVG icons
 
-## Contact
+<p align="right"><a href="#top">⬆ Back to Top</a></p>
 
-Hillman Chan - hillmanchan709@gmail.com
+## Support & Contact
 
-Project Link: [https://github.com/ChiFungHillmanChan/Job_Application_Tracking_System](https://github.com/ChiFungHillmanChan/Job_Application_Tracking_System)
+**GitHub**: [ChiFungHillmanChan/Job_Application_Tracking_System](https://github.com/ChiFungHillmanChan/Job_Application_Tracking_System)
+
+**For Issues:**
+1. Check existing [Issues](https://github.com/ChiFungHillmanChan/Job_Application_Tracking_System/issues)
+2. Create a new issue with detailed description
+3. Include error logs and environment details
+
+**For Premium Support:**
+- Upgrade to Pro tier for dedicated support
+- Include subscription details when contacting
+
+---
+
+**🎯 Built for job seekers who want to take control of their career journey**
