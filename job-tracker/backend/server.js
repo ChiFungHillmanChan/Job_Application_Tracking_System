@@ -112,16 +112,28 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/resumes', require('./routes/resumes'));
 
-// NEW: Job Finder routes
+// Job Finder routes
 try {
   app.use('/api/job-finder', require('./routes/jobFinder'));
   console.log('✅ Job Finder routes loaded successfully');
 } catch (error) {
   console.error('❌ Failed to load Job Finder routes:', error.message);
-  console.log('📝 Make sure you have created the following files:');
-  console.log('   - backend/routes/jobFinder.js');
-  console.log('   - backend/controllers/jobFinderController.js');
-  console.log('   - backend/models/SavedJob.js');
+}
+
+// AI Profile routes
+try {
+  app.use('/api/profile', require('./routes/profile'));
+  console.log('✅ Profile routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load Profile routes:', error.message);
+}
+
+// Auto-Apply Automation routes
+try {
+  app.use('/api/auto-apply', require('./routes/autoApply'));
+  console.log('✅ Auto-Apply routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load Auto-Apply routes:', error.message);
 }
 
 console.log('API routes loaded');
@@ -148,7 +160,14 @@ app.use('*', (req, res) => {
       'GET /api/jobs',
       'GET /api/job-finder/search',
       'POST /api/job-finder/saved',
-      'GET /api/job-finder/saved'
+      'GET /api/job-finder/saved',
+      'GET /api/profile',
+      'POST /api/profile/analyze',
+      'GET /api/auto-apply/stats',
+      'GET /api/auto-apply/config',
+      'POST /api/auto-apply/run',
+      'GET /api/auto-apply/queue',
+      'GET /api/auto-apply/history'
     ]
   });
 });
@@ -163,22 +182,16 @@ const server = app.listen(PORT, () => {
   console.log(`Server started successfully!`);
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`API Base URL: http://localhost:${PORT}/api`);
-  console.log(`Job Finder API: http://localhost:${PORT}/api/job-finder`);
   console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
-  
-  // Test if Job Finder routes are working
-  console.log('\n🧪 Testing Job Finder routes...');
-  const testRoutes = [
-    '/api/job-finder/search',
-    '/api/job-finder/saved'
-  ];
-  
-  testRoutes.forEach(route => {
-    console.log(`   - ${route} ${app._router.stack.some(layer => 
-      layer.route && layer.route.path === route || 
-      layer.regexp.test(route)
-    ) ? '✅' : '❌'}`);
-  });
+
+  // Start the automation scheduler
+  try {
+    const { startScheduler } = require('./services/automationScheduler');
+    startScheduler();
+    console.log('✅ Automation scheduler started');
+  } catch (error) {
+    console.error('❌ Failed to start automation scheduler:', error.message);
+  }
 });
 
 // Handle unhandled promise rejections
