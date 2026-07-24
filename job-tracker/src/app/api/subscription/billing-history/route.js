@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { withApi } from '@/server/http';
 import { requireAuth } from '@/server/auth';
-import { getStripe } from '@/server/stripe';
+import { getStripe, isStripeConfigured } from '@/server/stripe';
 import User from '@/server/models/User';
 import logger from '@/server/logger';
 
@@ -14,7 +14,10 @@ export const GET = withApi(async (request) => {
   try {
     const user = await User.findById(authUser._id);
 
-    if (!user.stripeCustomerId) {
+    // No billing account, or billing not configured on this deployment: there
+    // is genuinely no history to show, so degrade to an empty list rather than
+    // 503-ing the settings page.
+    if (!user.stripeCustomerId || !isStripeConfigured()) {
       return NextResponse.json(
         {
           success: true,

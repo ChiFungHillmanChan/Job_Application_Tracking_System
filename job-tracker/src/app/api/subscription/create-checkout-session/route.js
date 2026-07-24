@@ -20,6 +20,32 @@ export const POST = withApi(async (request) => {
       .json()
       .catch(() => ({}));
 
+    // Stripe will redirect the browser to these after checkout, so they are
+    // resolved against our own origin rather than trusted verbatim. They were
+    // previously passed through unvalidated (and with no default, so a client
+    // that omitted them got an opaque 500 from the Stripe API).
+    const origin = process.env.FRONTEND_URL || request.nextUrl.origin;
+    const sameOriginUrl = (candidate, fallbackPath) => {
+      if (typeof candidate === 'string' && candidate) {
+        try {
+          const parsed = new URL(candidate, origin);
+          if (parsed.origin === new URL(origin).origin) return parsed.toString();
+        } catch {
+          // fall through to the default below
+        }
+      }
+      return new URL(fallbackPath, origin).toString();
+    };
+
+    const resolvedSuccessUrl = sameOriginUrl(
+      successUrl,
+      '/settings/subscription?success=true'
+    );
+    const resolvedCancelUrl = sameOriginUrl(
+      cancelUrl,
+      '/settings/subscription?cancelled=true'
+    );
+
     if (!planId || !billingCycle) {
       return NextResponse.json(
         {
@@ -93,8 +119,8 @@ export const POST = withApi(async (request) => {
         },
       ],
       mode: 'subscription',
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+      success_url: resolvedSuccessUrl,
+      cancel_url: resolvedCancelUrl,
       metadata: {
         userId: user._id.toString(),
         planId: planId,
