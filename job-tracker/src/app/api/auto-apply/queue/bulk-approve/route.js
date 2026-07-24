@@ -6,10 +6,11 @@ import mongoose from 'mongoose';
 import { withApi } from '@/server/http';
 import { requireAuth } from '@/server/auth';
 import PreparedApplication from '@/server/models/PreparedApplication';
+import { readJsonBody, toFiniteNumber } from '@/server/requestUtils';
 
 export const POST = withApi(async (request) => {
   const authUser = await requireAuth(request);
-  const { applicationIds, minScore } = await request.json();
+  const { applicationIds, minScore } = await readJsonBody(request);
 
   const filter = { user: authUser._id, status: 'pending_review' };
 
@@ -26,8 +27,19 @@ export const POST = withApi(async (request) => {
       );
     }
     filter._id = { $in: objectIds };
-  } else if (minScore) {
-    filter.matchScore = { $gte: minScore };
+  } else if (minScore !== undefined && minScore !== null) {
+    // Coerced to a real number so a client cannot smuggle an operator object
+    // (e.g. {"$gt":""}) into the comparison. Mongoose's cast already rejected
+    // that, but only as a misleading 404 "Resource not found"; a bad value is
+    // a client error and should say so.
+    const score = toFiniteNumber(minScore);
+    if (score === null) {
+      return NextResponse.json(
+        { success: false, error: 'minScore must be a number' },
+        { status: 400 }
+      );
+    }
+    filter.matchScore = { $gte: score };
   }
 
   const result = await PreparedApplication.updateMany(filter, {

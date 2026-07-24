@@ -10,16 +10,19 @@ import { requireAuth } from '@/server/auth';
 import PreparedApplication from '@/server/models/PreparedApplication';
 import '@/server/models/SavedJob';
 import '@/server/models/Resume';
+import { parsePagination } from '@/server/requestUtils';
 
 export const GET = withApi(async (request) => {
   const authUser = await requireAuth(request);
   const searchParams = request.nextUrl.searchParams;
 
   const status = searchParams.get('status') || 'pending_review';
-  const page = searchParams.get('page') || 1;
-  const limit = searchParams.get('limit') || 20;
   const sortBy = searchParams.get('sortBy') || 'matchScore';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
+  // parsePagination clamps to positive integers with defaults. `parseInt` on a
+  // non-numeric param produced NaN, which flowed into .limit()/.skip() and
+  // serialized as `null` in the pagination block.
+  const { page, limit, skip } = parsePagination(searchParams, { defaultLimit: 20 });
 
   const filter = { user: authUser._id };
   if (status !== 'all') {
@@ -33,8 +36,8 @@ export const GET = withApi(async (request) => {
     .populate('savedJob')
     .populate('cvToUse', 'name originalFilename')
     .sort(sort)
-    .limit(parseInt(limit))
-    .skip((parseInt(page) - 1) * parseInt(limit));
+    .limit(limit)
+    .skip(skip);
 
   const totalCount = await PreparedApplication.countDocuments(filter);
 
@@ -44,10 +47,10 @@ export const GET = withApi(async (request) => {
       data: {
         applications,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          currentPage: page,
+          totalPages: Math.ceil(totalCount / limit),
           totalCount,
-          limit: parseInt(limit),
+          limit,
         },
       },
     },

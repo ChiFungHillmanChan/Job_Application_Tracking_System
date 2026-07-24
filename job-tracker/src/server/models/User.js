@@ -134,27 +134,21 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  // Usage limits (for premium users, set to -1 for unlimited)
+  // Denormalised copies of the plan allowance, kept only so existing documents
+  // keep a sane value. SUBSCRIPTION_PLANS (src/server/stripe.js) is the source
+  // of truth and the only thing enforcement reads - these previously said
+  // free = 8 resumes / 100 applications while SUBSCRIPTION_PLANS (and the
+  // /subscription/usage response the UI renders) said 5 and 30. -1 = unlimited.
   maxResumes: {
     type: Number,
     default: function() {
-      switch(this.subscriptionTier) {
-        case 'free': return 8;
-        case 'plus': return -1;
-        case 'pro': return -1;
-        default: return 8;
-      }
+      return this.subscriptionTier === 'free' ? 5 : -1;
     }
   },
   maxApplications: {
     type: Number,
     default: function() {
-      switch(this.subscriptionTier) {
-        case 'free': return 100;
-        case 'plus': return -1; // Changed from 1000 to unlimited
-        case 'pro': return -1;
-        default: return 100;
-      }
+      return this.subscriptionTier === 'free' ? 30 : -1;
     }
   },
   role: {
@@ -178,8 +172,8 @@ UserSchema.pre('save', function(next) {
       this.maxResumes = -1;
       this.maxApplications = -1;
     } else {
-      this.maxResumes = 8;
-      this.maxApplications = 100;
+      this.maxResumes = 5;
+      this.maxApplications = 30;
     }
   }
   next();

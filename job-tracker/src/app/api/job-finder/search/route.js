@@ -3,13 +3,19 @@
 // parseSalary/parseJobType), kept as-is in this file since it is a
 // self-contained, single-consumer implementation in the Express source too.
 // @route   GET /api/job-finder/search
-// @access  Public
+// @access  Private
 //
 // Deviation: the express-rate-limit `searchLimiter` middleware is dropped
 // entirely (platform WAF handles rate limiting later) - no reimplementation.
+//
+// This endpoint was public in the Express source. It is now behind requireAuth:
+// with no auth and no rate limit it was an open proxy onto our metered Reed API
+// key, so any anonymous caller could exhaust the quota. Only the UI (which is
+// itself behind auth) ever calls it, so gating it costs nothing.
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import { withApi } from '@/server/http';
+import { requireAuth } from '@/server/auth';
 import logger from '@/server/logger';
 
 // Reed.co.uk API configuration
@@ -17,6 +23,8 @@ const REED_API_BASE = 'https://www.reed.co.uk/api/1.0';
 const REED_API_KEY = process.env.REED_API_KEY;
 
 export const GET = withApi(async (request) => {
+  await requireAuth(request);
+
   const query = Object.fromEntries(request.nextUrl.searchParams.entries());
   const {
     keywords = '',

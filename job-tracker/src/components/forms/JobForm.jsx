@@ -15,7 +15,8 @@ const JobForm = ({ initialData = null, onSuccess, onCancel }) => {
     position: '',
     location: '',
     status: 'Saved',
-    jobType: 'Full-time',
+    jobType: 'full-time',
+    workType: 'onsite',
     url: '',
     salary: '',
     applicationDate: new Date().toISOString().split('T')[0],
@@ -46,42 +47,60 @@ const JobForm = ({ initialData = null, onSuccess, onCancel }) => {
     'Withdrawn'
   ];
 
-  // Job type options matching the backend enum
+  // Job type options matching the backend enum.
+  //
+  // These are { value, label } pairs because the stored value must be exactly
+  // one of the Job schema's enum members. The previous list submitted display
+  // strings ('Full-time', 'Contract', ...) which are case-mismatched against the
+  // enum ('full-time', 'contract', ...), and 'Remote'/'Other' are not job types
+  // at all - so every save failed validation with a 400.
   const jobTypeOptions = [
-    'Full-time',
-    'Part-time',
-    'Contract',
-    'Internship',
-    'Remote',
-    'Other'
+    { value: 'full-time', label: 'Full-time' },
+    { value: 'part-time', label: 'Part-time' },
+    { value: 'permanent', label: 'Permanent' },
+    { value: 'contract', label: 'Contract' },
+    { value: 'temporary', label: 'Temporary' },
+    { value: 'internship', label: 'Internship' }
+  ];
+
+  // 'Remote' used to be offered as a job type; it is really a work arrangement,
+  // which the Job schema models separately as `workType`.
+  const workTypeOptions = [
+    { value: 'onsite', label: 'On-site' },
+    { value: 'remote', label: 'Remote' },
+    { value: 'hybrid', label: 'Hybrid' }
   ];
 
   // Load initial data if editing
   useEffect(() => {
     if (initialData) {
+      // Read back from the real schema paths (applicationUrl / contactPerson.* /
+      // resumeUsed). The flat names below are form-local only.
       setFormData({
         company: initialData.company || '',
         position: initialData.position || '',
         location: initialData.location || '',
         status: initialData.status || 'Saved',
-        jobType: initialData.jobType || 'Full-time',
-        url: initialData.url || '',
+        jobType: initialData.jobType || 'full-time',
+        workType: initialData.workType || 'onsite',
+        url: initialData.applicationUrl || '',
         salary: initialData.salary || '',
-        applicationDate: initialData.applicationDate 
+        applicationDate: initialData.applicationDate
           ? new Date(initialData.applicationDate).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
-        contactName: initialData.contactName || '',
-        contactEmail: initialData.contactEmail || '',
-        contactPhone: initialData.contactPhone || '',
+        contactName: initialData.contactPerson?.name || '',
+        contactEmail: initialData.contactPerson?.email || '',
+        contactPhone: initialData.contactPerson?.phone || '',
         description: initialData.description || '',
         notes: initialData.notes || '',
         tags: initialData.tags ? initialData.tags.join(', ') : '',
-        resume: initialData.resume?._id || ''
+        resume: initialData.resumeUsed?._id || initialData.resumeUsed || ''
       });
-      
+
       // Show advanced section if any advanced fields have data
-      if (initialData.url || initialData.salary || initialData.contactName || 
-          initialData.contactEmail || initialData.contactPhone || 
+      if (initialData.applicationUrl || initialData.salary ||
+          initialData.contactPerson?.name || initialData.contactPerson?.email ||
+          initialData.contactPerson?.phone ||
           initialData.description || initialData.notes || initialData.tags?.length) {
         setShowAdvanced(true);
       }
@@ -126,19 +145,46 @@ const JobForm = ({ initialData = null, onSuccess, onCancel }) => {
     }
 
     try {
-      // Prepare data for submission
+      // Prepare data for submission, translating the flat form fields onto the
+      // Job schema's actual paths. Previously `url`, `contactName`,
+      // `contactEmail`, `contactPhone` and `resume` were posted as-is; none of
+      // them are schema paths, so Mongoose's strict mode dropped them silently
+      // and everything the user typed into the advanced section was discarded.
       const submitData = {
-        ...formData,
-        tags: formData.tags 
+        company: formData.company,
+        position: formData.position,
+        location: formData.location,
+        status: formData.status,
+        jobType: formData.jobType,
+        workType: formData.workType,
+        applicationUrl: formData.url,
+        salary: formData.salary,
+        description: formData.description,
+        notes: formData.notes,
+        tags: formData.tags
           ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
           : [],
         applicationDate: formData.applicationDate ? new Date(formData.applicationDate) : new Date(),
-        resume: formData.resume || undefined
+        contactPerson: {
+          name: formData.contactName,
+          email: formData.contactEmail,
+          phone: formData.contactPhone
+        },
+        resumeUsed: formData.resume || undefined
       };
+
+      // Drop empty contact fields, then the whole object if nothing was filled
+      // in (an all-empty contactPerson would fail the email format validator).
+      Object.keys(submitData.contactPerson).forEach(key => {
+        if (!submitData.contactPerson[key]) delete submitData.contactPerson[key];
+      });
+      if (Object.keys(submitData.contactPerson).length === 0) {
+        delete submitData.contactPerson;
+      }
 
       // Remove empty fields
       Object.keys(submitData).forEach(key => {
-        if (submitData[key] === '' || submitData[key] === null) {
+        if (submitData[key] === '' || submitData[key] === null || submitData[key] === undefined) {
           delete submitData[key];
         }
       });
@@ -295,8 +341,27 @@ const JobForm = ({ initialData = null, onSuccess, onCancel }) => {
                 className="input-field mt-1"
               >
                 {jobTypeOptions.map(type => (
-                  <option key={type} value={type}>
-                    {type}
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="workType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Work Arrangement
+              </label>
+              <select
+                id="workType"
+                name="workType"
+                value={formData.workType}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              >
+                {workTypeOptions.map(type => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
                   </option>
                 ))}
               </select>

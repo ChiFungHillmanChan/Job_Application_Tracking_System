@@ -9,8 +9,17 @@ class AdzunaAdapter extends BaseJobBoardAdapter {
     this.apiBase = 'https://api.adzuna.com/v1/api/jobs';
   }
 
+  // Adzuna's own API parameter is `app_key`, so ADZUNA_APP_KEY is the canonical
+  // name. ADZUNA_API_KEY is accepted as an alias because that is what the
+  // deployed environments were actually populated with - the mismatch meant
+  // isConfigured() was silently false and the whole adapter was skipped with a
+  // bare "Not configured" entry in runErrors.
+  static appKey() {
+    return process.env.ADZUNA_APP_KEY || process.env.ADZUNA_API_KEY;
+  }
+
   isConfigured() {
-    return !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY);
+    return !!(process.env.ADZUNA_APP_ID && AdzunaAdapter.appKey());
   }
 
   async search(query, location, filters = {}) {
@@ -24,7 +33,7 @@ class AdzunaAdapter extends BaseJobBoardAdapter {
 
     const params = {
       app_id: process.env.ADZUNA_APP_ID,
-      app_key: process.env.ADZUNA_APP_KEY,
+      app_key: AdzunaAdapter.appKey(),
       results_per_page: resultsPerPage,
       page
     };

@@ -15,6 +15,7 @@
 // The plan keys/ids/names were already 'plus'/'pro' in the source, aligned with
 // the User model enum (free/plus/pro) and entitlements TIER_LEVELS.
 import Stripe from 'stripe';
+import { ApiError } from '@/server/http';
 
 // Lazy singleton so `next build` (which evaluates every route module) does not
 // crash at import time when STRIPE_SECRET_KEY is absent. The Express source
@@ -23,9 +24,28 @@ import Stripe from 'stripe';
 let stripe;
 export function getStripe() {
   if (!stripe) {
-    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const key = process.env.STRIPE_SECRET_KEY;
+    // Fail loudly and specifically. An absent key, or the placeholder that ships
+    // in .env.example ("sk_test_your_stripe_secret_key_here"), otherwise reaches
+    // Stripe and comes back as an opaque 401 that every subscription route
+    // reports as "Server error while ..." - which looks like a code bug rather
+    // than a missing configuration value.
+    if (!key || key.includes('your_stripe_secret_key') || key.endsWith('_here')) {
+      throw new ApiError(
+        503,
+        'Billing is not configured. Set STRIPE_SECRET_KEY to a valid Stripe secret key.'
+      );
+    }
+    stripe = new Stripe(key);
   }
   return stripe;
+}
+
+// True when billing is usable. Lets read-only endpoints degrade gracefully
+// (e.g. return an empty billing history) instead of 503-ing a whole page.
+export function isStripeConfigured() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  return !!key && !key.includes('your_stripe_secret_key') && !key.endsWith('_here');
 }
 
 // Plan configurations with pricing - ported verbatim from the Express source

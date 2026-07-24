@@ -478,7 +478,10 @@ JobSchema.statics.findExistingImport = function(userId, source, externalId) {
 
 JobSchema.statics.getStatusCounts = function(userId) {
   return this.aggregate([
-    { $match: { user: mongoose.Types.ObjectId(userId) } },
+    // `new` is required: in Mongoose 8 ObjectId is a class, so calling it as a
+    // plain function throws "Class constructor ObjectId cannot be invoked
+    // without 'new'".
+    { $match: { user: new mongoose.Types.ObjectId(userId) } },
     { $group: { _id: '$status', count: { $sum: 1 } } },
     { $sort: { _id: 1 } }
   ]);
@@ -621,5 +624,38 @@ JobSchema.post('save', function(doc, next) {
   // Could add logic for sending notifications, updating dashboards, etc.
   next();
 });
+
+// Fields a client is allowed to set through POST /api/jobs and
+// PUT /api/jobs/:id. Everything omitted here is server-owned:
+//   - `user` (ownership - writable = handing your document to another account)
+//   - `source` / `externalId` / `externalUrl` / `importedAt` / `importedFromSaved`
+//     (set only by the job-finder import path)
+//   - `activities` / `analytics` / `interviews` / `offer` / `documents`
+//     (mutated through their own instance methods / endpoints)
+//   - `originalData` (`select: false` debug payload)
+export const JOB_UPDATABLE_FIELDS = [
+  'company',
+  'position',
+  'location',
+  'applicationUrl',
+  'status',
+  'priority',
+  'salary',
+  'jobType',
+  'workType',
+  'description',
+  'requirements',
+  'notes',
+  'tags',
+  'contactPerson',
+  'applicationDate',
+  'followUpDate',
+  'interviewDate',
+  'responseDate',
+  'deadlineDate',
+  'resumeUsed',
+  'coverLetter',
+  'companyInfo',
+];
 
 export default mongoose.models.Job || mongoose.model('Job', JobSchema);

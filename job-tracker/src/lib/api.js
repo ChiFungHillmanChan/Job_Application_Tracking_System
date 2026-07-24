@@ -146,7 +146,12 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   const originalGet = api.get;
   const originalPost = api.post;
   const originalPut = api.put;
-  const originalDelete = axios.delete.bind(axios);
+  // Must be the `api` instance, not the global `axios`. The global client has
+  // neither the `/api` baseURL nor the request interceptor that attaches the
+  // Bearer token, so `axios.delete('/jobs/123')` hit `/jobs/123` unauthenticated
+  // (no such route -> error), the catch below fired, and the mock fallback
+  // reported success while the real record was never touched.
+  const originalDelete = api.delete;
   
   const saveMockUsers = () => {
     try {
@@ -1627,10 +1632,32 @@ api.put = async function(url, data, config) {
   api.delete = async function(url, config) {
     try {
       // Try the real API first
-      return await originalDelete(url, config);
+      return await originalDelete.call(this, url, config);
     } catch (error) {
+      // Same guards as api.get/post/put, which this method was missing: never
+      // mask a real backend response with mock data. Without these, a genuine
+      // 4xx/5xx from the server was swallowed and reported to the UI as a
+      // successful delete.
+      if (error.response && [400, 401, 403, 404].includes(error.response.status)) {
+        throw error;
+      }
+
+      const isNetworkError =
+        error.code === 'ECONNABORTED' ||
+        error.message?.includes('Network Error') ||
+        error.message?.includes('timeout') ||
+        error.name === 'AbortError';
+
+      const token = localStorage.getItem('token');
+      const isRealToken = token && !token.startsWith('mock-token-');
+
+      if (isRealToken && !isNetworkError) {
+        console.error('API DELETE error with real backend - not using mock fallback');
+        throw error;
+      }
+
       console.warn(`API DELETE to ${url} failed, using mock data`);
-      
+
       // Handle resume deletion
       if (url.includes('/resumes/')) {
         console.info('Using mock data for deleting resume');

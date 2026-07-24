@@ -270,16 +270,29 @@ async function scoreJobStep(ctx, job) {
   }
 }
 
-// Step: for a qualified job, create the SavedJob, generate a cover letter, and
-// create the PreparedApplication. Ports the inner try/catch of runSearchPipeline:
+// Step: for a qualified job, generate a cover letter, then create the SavedJob
+// and the PreparedApplication. Ports the inner try/catch of runSearchPipeline:
 // a duplicate (11000) is silently skipped; any other failure is recorded and the
 // run continues (we return the error instead of throwing so the workflow lives).
+//
+// Ordering matters. The cover letter is generated BEFORE the SavedJob is
+// written, and a failure after the write is compensated by deleting it. The
+// original order (SavedJob -> OpenAI -> PreparedApplication) lost jobs
+// permanently: a transient OpenAI failure left a SavedJob with no
+// PreparedApplication, so the user never saw it in the queue, and because
+// searchBoardsStep dedupes against existing SavedJob externalIds, every later
+// run filtered that job out. Nothing ever retried it.
 async function prepareApplicationStep(ctx, result) {
   'use step';
   await connectDB();
 
   const job = result.job;
+  let savedJobId = null;
   try {
+    // Generate first: if this throws, no rows are written and the job stays
+    // undeduped, so the next run picks it up again.
+    const coverLetterResult = await generateCoverLetter(ctx.profile, job);
+
     const savedJob = await SavedJob.create({
       user: ctx.userId,
       externalId: job.externalId,
@@ -298,8 +311,7 @@ async function prepareApplicationStep(ctx, result) {
       expirationDate: job.expirationDate,
       tags: ['auto-found'],
     });
-
-    const coverLetterResult = await generateCoverLetter(ctx.profile, job);
+    savedJobId = savedJob._id;
 
     await PreparedApplication.create({
       user: ctx.userId,
@@ -318,6 +330,20 @@ async function prepareApplicationStep(ctx, result) {
       logger.info(`Duplicate job skipped: ${job.title} at ${job.company}`);
       return { prepared: false, duplicate: true };
     }
+
+    // Compensate: roll back a SavedJob whose PreparedApplication failed, so it
+    // cannot silently suppress this job on every future run.
+    if (savedJobId) {
+      try {
+        await SavedJob.findByIdAndDelete(savedJobId);
+        logger.warn(`Rolled back orphaned SavedJob ${savedJobId} for "${job.title}"`);
+      } catch (rollbackError) {
+        logger.error(
+          `Failed to roll back orphaned SavedJob ${savedJobId}: ${rollbackError.message}`
+        );
+      }
+    }
+
     logger.error(`Failed to prepare application: ${error.message}`);
     return { prepared: false, error: { board: job.source, error: error.message } };
   }
