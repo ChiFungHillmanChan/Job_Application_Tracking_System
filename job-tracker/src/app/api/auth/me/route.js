@@ -60,6 +60,7 @@ export const GET = withApi(async (request) => {
           name: user.name,
           email: user.email,
           subscriptionTier: user.subscriptionTier,
+          role: user.role || 'user',
           preferences: userPreferences,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
