@@ -3,6 +3,9 @@ import OpenAI from 'openai';
 
 let openaiInstance = null;
 
+// Model for all AI features; override with the OPENAI_MODEL env var.
+export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+
 export function getOpenAI() {
   if (!openaiInstance) {
     const apiKey = process.env.OPENAI_API_KEY;

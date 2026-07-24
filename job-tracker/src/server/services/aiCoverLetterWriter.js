@@ -1,5 +1,5 @@
 // ESM port of backend/services/aiCoverLetterWriter.js
-import { getOpenAI } from './openai';
+import { getOpenAI, OPENAI_MODEL } from './openai';
 import { loadPromptFile } from '@/server/utils/loadPrompt';
 import logger from '@/server/logger';
 
@@ -21,7 +21,7 @@ export async function generateCoverLetter(userProfile, jobData) {
   const jobText = formatJobForPrompt(jobData);
 
   const response = await openai.responses.create({
-    model: 'gpt-4.1',
+    model: OPENAI_MODEL,
     input: [
       {
         type: 'message',
