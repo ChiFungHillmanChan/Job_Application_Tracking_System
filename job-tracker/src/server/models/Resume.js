@@ -93,4 +93,22 @@ ResumeSchema.pre('save', function(next) {
   next();
 });
 
+// blobUrl is a permanent, public, unauthenticated URL to the user's CV -
+// treat it as an internal-only field. Server code (download/preview/delete
+// handlers) reads `resume.blobUrl` directly off the Mongoose document, which
+// is unaffected by these transforms; only JSON/object serialization (i.e.
+// what API responses send to the client) has it stripped.
+ResumeSchema.set('toJSON', {
+  transform(doc, ret) {
+    delete ret.blobUrl;
+    return ret;
+  },
+});
+ResumeSchema.set('toObject', {
+  transform(doc, ret) {
+    delete ret.blobUrl;
+    return ret;
+  },
+});
+
 export default mongoose.models.Resume || mongoose.model('Resume', ResumeSchema);
