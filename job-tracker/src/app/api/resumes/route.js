@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import { withApi } from '@/server/http';
 import { requireAuth } from '@/server/auth';
 import { uploadResumeBlob, deleteResumeBlob } from '@/server/blob';
+import { assertWithinPlanLimit } from '@/server/entitlements';
 import Resume from '@/server/models/Resume';
 
 export const GET = withApi(async (request) => {
@@ -32,6 +33,13 @@ export const GET = withApi(async (request) => {
 
 export const POST = withApi(async (request) => {
   const user = await requireAuth(request);
+
+  // Enforced before the upload, not after: the file goes to Vercel Blob (billed
+  // storage) and nothing else in the app checked a resume count, so any account
+  // could store unbounded 5MB files. The allowance comes from SUBSCRIPTION_PLANS,
+  // the same numbers GET /api/subscription/usage shows the user.
+  const resumeCount = await Resume.countDocuments({ user: user._id });
+  assertWithinPlanLimit(user, 'resumes', resumeCount, 'resume');
 
   const form = await request.formData();
   const file = form.get('resumeFile');
@@ -74,7 +82,7 @@ export const POST = withApi(async (request) => {
 
   const fileSize = `${Math.round(file.size / 1024)} KB`;
 
-  const resumeCount = await Resume.countDocuments({ user: user._id });
+  // Reuses the count taken above for the plan check.
   const isDefault = resumeCount === 0;
 
   const resume = await Resume.create({

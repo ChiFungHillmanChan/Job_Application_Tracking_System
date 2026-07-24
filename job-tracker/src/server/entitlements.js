@@ -8,6 +8,7 @@
 // The tier/feature/usage maps and the mock getUserUsage behavior are kept
 // unchanged, as are all user-facing message strings.
 import { ApiError } from '@/server/http';
+import { SUBSCRIPTION_PLANS } from '@/server/stripe';
 import logger from '@/server/logger';
 
 export const FEATURE_TIERS = {
@@ -43,77 +44,50 @@ export const TIER_LEVELS = {
   'pro': 2
 };
 
-export const USAGE_LIMITS = {
-  free: {
-    customThemes: 1,
-    savedColors: 5,
-    exportPerMonth: 0,
-    apiCallsPerDay: 0
-  },
-  plus: {
-    customThemes: 25,
-    savedColors: 50,
-    exportPerMonth: 10,
-    apiCallsPerDay: 100
-  },
-  pro: {
-    customThemes: -1,
-    savedColors: -1,
-    exportPerMonth: -1,
-    apiCallsPerDay: -1
-  }
-};
-
 export const hasRequiredTier = (requiredTier, userTier) => {
   const requiredLevel = TIER_LEVELS[requiredTier] || 0;
   const userLevel = TIER_LEVELS[userTier] || 0;
   return userLevel >= requiredLevel;
 };
 
-// Mock usage lookup, unchanged from the Express source: a real
-// implementation would read from a usage-tracking collection.
-export const getUserUsage = async (userId, metric, period = 'total') => {
-  const mockUsage = {
-    customThemes: 2,
-    savedColors: 8,
-    exportPerMonth: 3,
-    apiCallsPerDay: 25
-  };
+// The former USAGE_LIMITS table and its getUserUsage/checkUsageLimit/checkUsage/
+// getUsageSummary/incrementUsage/resetUsageCounters helpers were removed. They
+// had no callers anywhere in the app, and getUserUsage was a stub returning
+// hardcoded numbers (customThemes: 2, savedColors: 8, ...), so any future
+// caller would have silently gated on fabricated usage - e.g. checkUsage(user,
+// 'customThemes') returned 429 for every free user regardless of reality.
+// Real, enforceable limits live in SUBSCRIPTION_PLANS and are applied by
+// assertWithinPlanLimit below.
 
-  return mockUsage[metric] || 0;
+// Resolves a numeric plan limit for a feature. SUBSCRIPTION_PLANS is the single
+// source of truth: it is what GET /api/subscription/usage and /plans report to
+// the UI, so enforcement and display cannot drift apart. `Infinity` means
+// unlimited and compares correctly without any special-casing.
+export const getPlanLimit = (user, feature) => {
+  const tier = user?.subscriptionTier || 'free';
+  const plan = SUBSCRIPTION_PLANS[tier] || SUBSCRIPTION_PLANS.free;
+  const limit = plan.features?.[feature];
+  return typeof limit === 'number' ? limit : Infinity;
 };
 
-export const checkUsageLimit = async (user, feature, metric) => {
-  const userTier = user.subscriptionTier || 'free';
-  const limits = USAGE_LIMITS[userTier];
+// Throws ApiError(403) when `currentCount` has already reached the caller's
+// plan allowance for `feature`. The message mirrors the saved-jobs limit
+// response shape the job-finder UI already understands.
+export const assertWithinPlanLimit = (user, feature, currentCount, label) => {
+  const limit = getPlanLimit(user, feature);
 
-  if (!limits) {
-    return { allowed: false, reason: 'Invalid subscription tier' };
+  if (currentCount >= limit) {
+    const tier = user?.subscriptionTier || 'free';
+    logger.warn(
+      `Plan limit reached for user ${user?._id}: ${feature} ${currentCount}/${limit} on ${tier}`
+    );
+    throw new ApiError(
+      403,
+      `You have reached your ${label} limit (${currentCount}/${limit}) on the ${tier} plan. Upgrade to add more.`
+    );
   }
 
-  const limit = limits[metric];
-
-  if (limit === -1) {
-    return { allowed: true };
-  }
-
-  const currentUsage = await getUserUsage(user._id, metric);
-
-  if (currentUsage >= limit) {
-    return {
-      allowed: false,
-      reason: `Usage limit reached: ${currentUsage}/${limit} ${metric}`,
-      limit,
-      currentUsage
-    };
-  }
-
-  return {
-    allowed: true,
-    limit,
-    currentUsage,
-    remaining: limit - currentUsage
-  };
+  return { limit, currentCount, remaining: limit - currentCount };
 };
 
 // Port of requirePremium(requiredTier) middleware factory: throws instead of
@@ -136,7 +110,7 @@ export const requirePremium = (user, requiredTier = 'plus') => {
   return {
     tier: userTier,
     hasAccess: true,
-    limits: USAGE_LIMITS[userTier]
+    limits: (SUBSCRIPTION_PLANS[userTier] || SUBSCRIPTION_PLANS.free).features
   };
 };
 
@@ -166,27 +140,6 @@ export const requireFeature = (user, feature) => {
   };
 };
 
-// Port of checkUsage(metric) middleware factory.
-export const checkUsage = async (user, metric) => {
-  if (!user) {
-    throw new ApiError(401, 'Authentication required');
-  }
-
-  const usageCheck = await checkUsageLimit(user, null, metric);
-
-  if (!usageCheck.allowed) {
-    logger.warn(`Usage limit exceeded for user ${user._id}: ${usageCheck.reason}`);
-    throw new ApiError(429, usageCheck.reason);
-  }
-
-  return {
-    metric,
-    limit: usageCheck.limit,
-    currentUsage: usageCheck.currentUsage,
-    remaining: usageCheck.remaining
-  };
-};
-
 export const getFeatureAvailability = (user) => {
   const userTier = user?.subscriptionTier || 'free';
   const availability = {};
@@ -202,39 +155,3 @@ export const getFeatureAvailability = (user) => {
   return availability;
 };
 
-export const getUsageSummary = async (user) => {
-  const userTier = user?.subscriptionTier || 'free';
-  const limits = USAGE_LIMITS[userTier];
-  const summary = {};
-
-  for (const [metric, limit] of Object.entries(limits)) {
-    const currentUsage = await getUserUsage(user._id, metric);
-
-    summary[metric] = {
-      limit: limit === -1 ? 'unlimited' : limit,
-      current: currentUsage,
-      remaining: limit === -1 ? 'unlimited' : Math.max(0, limit - currentUsage),
-      percentage: limit === -1 ? 0 : Math.round((currentUsage / limit) * 100)
-    };
-  }
-
-  return summary;
-};
-
-export const incrementUsage = async (userId, metric, amount = 1) => {
-  // This would typically update a usage tracking database
-  logger.info(`Usage incremented for user ${userId}: ${metric} +${amount}`);
-
-  // 1. Update usage in database
-  // 2. Check if user is approaching limits
-  // 3. Send notifications if needed
-  // 4. Return updated usage stats
-
-  return { success: true, metric, amount };
-};
-
-export const resetUsageCounters = async (period = 'monthly') => {
-  logger.info(`Resetting ${period} usage counters`);
-
-  return { success: true, period, resetAt: new Date() };
-};
