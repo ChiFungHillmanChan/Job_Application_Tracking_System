@@ -44,11 +44,16 @@ const SearchConfigSchema = new mongoose.Schema({
   },
   excludeCompanies: [String],
   excludeKeywords: [String],
-  boards: [{
-    type: String,
-    enum: ['reed', 'adzuna', 'indeed', 'linkedin', 'totaljobs'],
-    default: 'reed'
-  }],
+  // Note: the default must live on the array itself — a `default` on the
+  // element definition leaves new documents with an empty array, which made
+  // the automation silently search zero boards.
+  boards: {
+    type: [{
+      type: String,
+      enum: ['reed', 'adzuna', 'indeed', 'linkedin', 'totaljobs']
+    }],
+    default: ['reed']
+  },
   isActive: {
     type: Boolean,
     default: true
