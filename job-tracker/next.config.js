@@ -1,3 +1,5 @@
+const { withWorkflow } = require('workflow/next');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -8,7 +10,21 @@ const nextConfig = {
   // require instead, which resolves the package correctly. Discovered
   // while smoke-testing POST /api/profile/analyze (task 7), the first
   // caller of src/server/services/cvParser.js in this app.
-  serverExternalPackages: ['pdf-parse', 'pdfjs-dist'],
+  // `xdg-app-paths` (pulled in transitively by the Workflow DevKit local-world
+  // runtime that backs the generated /.well-known/workflow/* routes) derives a
+  // name from its caller's module filename at import time via
+  // `path.parse(<filename>)`. When webpack bundles it, that filename is
+  // undefined during `next build`'s "collect page data" pass and it throws
+  // `ERR_INVALID_ARG_TYPE`. Keeping it external forces Node's native require,
+  // where the filename resolves correctly.
+  serverExternalPackages: ['pdf-parse', 'pdfjs-dist', 'xdg-app-paths'],
+  // AI prompt .txt files are read at runtime via fs from src/server/prompts;
+  // ensure they are traced into the serverless bundles for /api/** routes and
+  // for the workflow steps (which also loadPromptFile).
+  outputFileTracingIncludes: {
+    '/api/**': ['./src/server/prompts/**'],
+  },
 };
 
-module.exports = nextConfig;
+// withWorkflow enables the "use workflow" / "use step" directives (WDK compiler).
+module.exports = withWorkflow(nextConfig);
