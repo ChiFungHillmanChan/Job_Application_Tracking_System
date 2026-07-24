@@ -17,7 +17,7 @@ const nextConfig = {
   // undefined during `next build`'s "collect page data" pass and it throws
   // `ERR_INVALID_ARG_TYPE`. Keeping it external forces Node's native require,
   // where the filename resolves correctly.
-  serverExternalPackages: ['pdf-parse', 'pdfjs-dist', 'xdg-app-paths'],
+  serverExternalPackages: ['pdf-parse', 'pdfjs-dist', 'xdg-app-paths', '@napi-rs/canvas'],
 };
 
 // withWorkflow enables the "use workflow" / "use step" directives (WDK compiler).
