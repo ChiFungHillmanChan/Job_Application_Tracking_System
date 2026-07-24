@@ -3,6 +3,16 @@ import BaseJobBoardAdapter from './baseAdapter';
 import axios from 'axios';
 import logger from '@/server/logger';
 
+// Reed returns UK-format dates ("DD/MM/YYYY"), which `new Date()` cannot
+// parse (it yields Invalid Date and SavedJob validation then rejects the
+// whole job). Parse explicitly; fall back to native parsing for ISO strings.
+function parseReedDate(value) {
+  if (!value) return null;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(value).trim());
+  const d = m ? new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00Z`) : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 class ReedAdapter extends BaseJobBoardAdapter {
   constructor() {
     super('reed');
@@ -92,8 +102,8 @@ class ReedAdapter extends BaseJobBoardAdapter {
       applicationUrl: raw.jobUrl || raw.url || '',
       companyUrl: raw.employerProfileUrl || null,
       logoUrl: raw.employerLogoUrl || null,
-      postedDate: raw.date ? new Date(raw.date) : new Date(),
-      expirationDate: raw.expirationDate ? new Date(raw.expirationDate) : null
+      postedDate: raw.date ? parseReedDate(raw.date) || new Date() : new Date(),
+      expirationDate: raw.expirationDate ? parseReedDate(raw.expirationDate) : null
     };
   }
 
