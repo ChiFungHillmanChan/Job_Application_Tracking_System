@@ -93,14 +93,15 @@ export async function analyzeCV(cvText) {
     throw new Error(`CV analysis did not complete. Status: ${response.status}`);
   }
 
-  const outputMessage = response.output.find(item => item.type === 'message');
-  const textContent = outputMessage?.content?.find(item => item.type === 'output_text');
+  // response.output_text concatenates every output_text part — GPT-5.x can
+  // split structured output across multiple parts/messages.
+  const outputText = response.output_text;
 
-  if (!textContent?.text) {
+  if (!outputText) {
     throw new Error('No text output received from CV analysis');
   }
 
-  const result = JSON.parse(textContent.text);
+  const result = JSON.parse(outputText);
   logger.info(`CV analyzed: ${result.experience.length} experiences, ${result.skills.technical.length} technical skills`);
   return result;
 }

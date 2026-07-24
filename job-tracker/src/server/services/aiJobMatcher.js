@@ -54,14 +54,15 @@ export async function scoreJobMatch(userProfile, jobData) {
     throw new Error(`Job matching did not complete. Status: ${response.status}`);
   }
 
-  const outputMessage = response.output.find(item => item.type === 'message');
-  const textContent = outputMessage?.content?.find(item => item.type === 'output_text');
+  // response.output_text concatenates every output_text part — GPT-5.x can
+  // split structured output across multiple parts/messages.
+  const outputText = response.output_text;
 
-  if (!textContent?.text) {
+  if (!outputText) {
     throw new Error('No text output received from job matching');
   }
 
-  const result = JSON.parse(textContent.text);
+  const result = JSON.parse(outputText);
   result.matchScore = Math.max(0, Math.min(100, Math.round(result.matchScore)));
 
   logger.info(`Job match scored: ${result.matchScore}/100 for "${jobData.title}" at "${jobData.company}"`);

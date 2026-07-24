@@ -75,14 +75,15 @@ export async function generateApplicationAnswers(userProfile, jobData, questions
     throw new Error(`Application answers generation did not complete. Status: ${response.status}`);
   }
 
-  const outputMessage = response.output.find(item => item.type === 'message');
-  const textContent = outputMessage?.content?.find(item => item.type === 'output_text');
+  // response.output_text concatenates every output_text part — GPT-5.x can
+  // split structured output across multiple parts/messages.
+  const outputText = response.output_text;
 
-  if (!textContent?.text) {
+  if (!outputText) {
     throw new Error('No text output received from application answers');
   }
 
-  const result = JSON.parse(textContent.text);
+  const result = JSON.parse(outputText);
   logger.info(`Generated ${result.answers.length} application answers for "${jobData.title}"`);
   return result.answers;
 }
