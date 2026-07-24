@@ -2,23 +2,23 @@
 // @route   POST /api/job-finder/import/:savedJobId
 // @access  Private (requires the 'job_import' feature)
 //
-// Note: `requireFeature(authUser, 'job_import')` is called per the task
-// brief, mirroring the Express route wiring
-// (`requireFeature('job_import')` middleware in backend/routes/jobFinder.js).
-// However 'job_import' is not present in FEATURE_TIERS
-// (src/server/entitlements.js), nor was it present in the original Express
-// FEATURE_TIERS map (backend/middleware/premiumRequired.js) - this is a
-// pre-existing bug carried over verbatim: requireFeature throws
-// ApiError(400, 'Unknown feature') for every caller regardless of tier,
-// so the manual `user.subscriptionTier === 'free'` check further below
-// (also ported verbatim) is unreachable dead code, same as in Express.
+// Fix (task-11 local E2E): 'job_import' was registered at 'free' tier in
+// FEATURE_TIERS (src/server/entitlements.js, commit 288b617) specifically so
+// requireFeature() would grant free-tier users access instead of 400-ing
+// 'Unknown feature'. That change made the manual
+// `user.subscriptionTier === 'free'` block below - previously "unreachable
+// dead code" per the old comment here - into live code that immediately
+// re-blocked the exact tier requireFeature had just been fixed to allow,
+// with a stale 'Plus feature' message. Removed the redundant re-fetch/check;
+// requireFeature(authUser, 'job_import') is the single source of truth for
+// this gate, and authUser (from requireAuth) already carries
+// subscriptionTier.
 import { NextResponse } from 'next/server';
 import { withApi } from '@/server/http';
 import { requireAuth } from '@/server/auth';
 import { requireFeature } from '@/server/entitlements';
 import SavedJob from '@/server/models/SavedJob';
 import Job from '@/server/models/Job';
-import User from '@/server/models/User';
 import logger from '@/server/logger';
 
 export const POST = withApi(async (request, context) => {
@@ -50,22 +50,6 @@ export const POST = withApi(async (request, context) => {
         data: { importedJobId: savedJob.importedJobId },
       },
       { status: 409 }
-    );
-  }
-
-  // Check user's subscription tier for import feature
-  const user = await User.findById(authUser._id);
-  if (user.subscriptionTier === 'free') {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Job import is a Plus feature. Upgrade to import jobs to your tracker.',
-        code: 'FEATURE_RESTRICTED',
-        requiredTier: 'plus',
-        userTier: user.subscriptionTier,
-        upgradeUrl: '/settings/subscription',
-      },
-      { status: 403 }
     );
   }
 
