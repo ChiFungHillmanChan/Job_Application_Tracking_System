@@ -18,12 +18,6 @@ const nextConfig = {
   // `ERR_INVALID_ARG_TYPE`. Keeping it external forces Node's native require,
   // where the filename resolves correctly.
   serverExternalPackages: ['pdf-parse', 'pdfjs-dist', 'xdg-app-paths'],
-  // AI prompt .txt files are read at runtime via fs from src/server/prompts;
-  // ensure they are traced into the serverless bundles for /api/** routes and
-  // for the workflow steps (which also loadPromptFile).
-  outputFileTracingIncludes: {
-    '/api/**': ['./src/server/prompts/**'],
-  },
 };
 
 // withWorkflow enables the "use workflow" / "use step" directives (WDK compiler).

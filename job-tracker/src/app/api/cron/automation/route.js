@@ -37,34 +37,42 @@ export async function GET(request) {
   let skipped = 0;
 
   for (const config of activeConfigs) {
-    // shouldRunNow() gates on searchFrequency vs lastRunAt (instance method).
-    if (!config.shouldRunNow()) {
-      skipped += 1;
-      continue;
-    }
-
-    const profile = await UserProfile.findOne({ user: config.user }).select('_id');
-    if (!profile) {
-      logger.warn(`Cron: no profile for user ${config.user}, skipping config ${config._id}`);
-      skipped += 1;
-      continue;
-    }
-
-    const automationRun = await AutomationRun.create({
-      user: config.user,
-      searchConfig: config._id,
-      status: 'running',
-    });
-
+    // One bad config (a DB hiccup on the profile lookup / run create, a start()
+    // failure, etc.) must not 500 the whole cron - log it and move on, matching
+    // automationScheduler.runScheduledSearches' per-config tolerance.
     try {
-      await start(userAutomationWorkflow, [String(config._id), String(automationRun._id)]);
-      triggered += 1;
-    } catch (error) {
-      logger.error(`Cron: failed to start workflow for config ${config._id}: ${error.message}`);
-      await AutomationRun.findByIdAndUpdate(automationRun._id, {
-        status: 'failed',
-        runErrors: [{ board: 'scheduler', error: error.message }],
+      // shouldRunNow() gates on searchFrequency vs lastRunAt (instance method).
+      if (!config.shouldRunNow()) {
+        skipped += 1;
+        continue;
+      }
+
+      const profile = await UserProfile.findOne({ user: config.user }).select('_id');
+      if (!profile) {
+        logger.warn(`Cron: no profile for user ${config.user}, skipping config ${config._id}`);
+        skipped += 1;
+        continue;
+      }
+
+      const automationRun = await AutomationRun.create({
+        user: config.user,
+        searchConfig: config._id,
+        status: 'running',
       });
+
+      try {
+        await start(userAutomationWorkflow, [String(config._id), String(automationRun._id)]);
+        triggered += 1;
+      } catch (error) {
+        logger.error(`Cron: failed to start workflow for config ${config._id}: ${error.message}`);
+        await AutomationRun.findByIdAndUpdate(automationRun._id, {
+          status: 'failed',
+          runErrors: [{ board: 'scheduler', error: error.message }],
+        });
+      }
+    } catch (error) {
+      logger.error(`Cron: error processing config ${config._id}: ${error.message}`);
+      skipped += 1;
     }
   }
 
