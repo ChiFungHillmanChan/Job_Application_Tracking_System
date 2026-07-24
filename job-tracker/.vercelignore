@@ -4,6 +4,6 @@
 backend
 # Local junk
 .DS_Store
-prompts
+/prompts
 preference.txt
 directory_structure.txt
