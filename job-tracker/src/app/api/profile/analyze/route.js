@@ -22,7 +22,9 @@ export const maxDuration = 300;
 
 export const POST = withApi(async (request) => {
   const authUser = await requireAuth(request);
-  const body = await request.json();
+  // resumeId is optional; Express's body-parser tolerated an empty body,
+  // so an empty/absent JSON body must not be an error here either.
+  const body = await request.json().catch(() => ({}));
   const { resumeId } = body;
 
   let resume;
