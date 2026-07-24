@@ -47,10 +47,15 @@ const SearchConfigSchema = new mongoose.Schema({
   // Note: the default must live on the array itself — a `default` on the
   // element definition leaves new documents with an empty array, which made
   // the automation silently search zero boards.
+  // Only names with a registered adapter in src/server/services/jobBoards belong
+  // here. 'indeed' / 'linkedin' / 'totaljobs' were previously accepted with no
+  // adapter behind them, so selecting one made searchAllBoards throw "Unknown
+  // job board adapter" for the whole run. Indeed and LinkedIn are now reachable
+  // through the 'jsearch' aggregator instead.
   boards: {
     type: [{
       type: String,
-      enum: ['reed', 'adzuna', 'indeed', 'linkedin', 'totaljobs']
+      enum: ['reed', 'adzuna', 'jooble', 'arbeitnow', 'remotive', 'jsearch']
     }],
     default: ['reed']
   },

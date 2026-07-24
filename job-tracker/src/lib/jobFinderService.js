@@ -21,6 +21,21 @@ class JobFinderService {
     return Date.now() - cacheEntry.timestamp < this.cacheTimeout;
   }
 
+  // Board catalog: which sources this deployment can search, and which of them
+  // the current plan unlocks. Cached for the page lifetime since it only
+  // changes when env vars or the user's tier change.
+  async getBoards() {
+    if (this._boards) return this._boards;
+
+    const response = await api.get('/job-finder/boards');
+    if (!response.data?.success) {
+      throw new Error('Failed to load job board list');
+    }
+
+    this._boards = response.data;
+    return this._boards;
+  }
+
   // Search for jobs with caching
   async searchJobs(searchParams = {}) {
     const cacheKey = this.generateCacheKey(searchParams);
@@ -296,6 +311,26 @@ class JobFinderService {
         name: 'Indeed',
         color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
         url: 'https://www.indeed.co.uk'
+      },
+      'jooble': {
+        name: 'Jooble',
+        color: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300',
+        url: 'https://jooble.org'
+      },
+      'arbeitnow': {
+        name: 'Arbeitnow',
+        color: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300',
+        url: 'https://www.arbeitnow.com'
+      },
+      'remotive': {
+        name: 'Remotive',
+        color: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300',
+        url: 'https://remotive.com'
+      },
+      'jsearch': {
+        name: 'LinkedIn / Indeed',
+        color: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300',
+        url: null
       }
     };
 

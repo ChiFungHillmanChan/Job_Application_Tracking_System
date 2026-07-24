@@ -173,9 +173,15 @@ const JobSchema = new mongoose.Schema({
   }],
 
   // NEW: External job integration fields
+  // POST /api/job-finder/import/:savedJobId copies SavedJob.source verbatim into
+  // this field, so every value SavedJob.source accepts must be accepted here too
+  // - otherwise importing a job from a newer board 400s on validation.
   source: {
     type: String,
-    enum: ['manual', 'reed', 'adzuna', 'indeed', 'linkedin', 'other'],
+    enum: [
+      'manual', 'reed', 'adzuna', 'jooble', 'arbeitnow', 'remotive', 'jsearch',
+      'indeed', 'linkedin', 'other'
+    ],
     default: 'manual',
     index: true
   },

@@ -1,386 +1,255 @@
-// Port of backend/controllers/jobFinderController.js searchJobs + its
-// inline Reed API integration (searchReedJobs/standardizeReedJob/
-// parseSalary/parseJobType), kept as-is in this file since it is a
-// self-contained, single-consumer implementation in the Express source too.
+// Multi-board job search.
 // @route   GET /api/job-finder/search
 // @access  Private
+//
+// This handler previously carried its own inline Reed integration and searched
+// Reed and nothing else, while the adapter registry in
+// src/server/services/jobBoards (Reed + Adzuna + friends) was used only by the
+// automation workflow. The duplicated Reed client has been deleted and this
+// route now goes through the same registry, so every board the automation can
+// reach is reachable from the Job Finder UI too.
+//
+// Response shape is unchanged: { success, data: { jobs, pagination, source,
+// searchParams } }. `boardsSearched` / `boardErrors` are additive.
 //
 // Deviation: the express-rate-limit `searchLimiter` middleware is dropped
 // entirely (platform WAF handles rate limiting later) - no reimplementation.
 //
 // This endpoint was public in the Express source. It is now behind requireAuth:
-// with no auth and no rate limit it was an open proxy onto our metered Reed API
-// key, so any anonymous caller could exhaust the quota. Only the UI (which is
-// itself behind auth) ever calls it, so gating it costs nothing.
+// with no auth and no rate limit it was an open proxy onto our metered job board
+// API keys, so any anonymous caller could exhaust the quota. Only the UI (which
+// is itself behind auth) ever calls it, so gating it costs nothing.
 import { NextResponse } from 'next/server';
-import axios from 'axios';
 import { withApi } from '@/server/http';
 import { requireAuth } from '@/server/auth';
+import { searchAllBoards, resolveBoards } from '@/server/services/jobBoards';
+import { secondsUntil } from '@/server/services/jobBoards/quota';
 import logger from '@/server/logger';
 
-// Reed.co.uk API configuration
-const REED_API_BASE = 'https://www.reed.co.uk/api/1.0';
-const REED_API_KEY = process.env.REED_API_KEY;
+// Boards are searched concurrently, but the slowest (JSearch, 20s) plus
+// Mongo connect can outrun the platform default.
+export const maxDuration = 60;
+
+const asBool = (value, fallback) => {
+  if (value === undefined || value === '') return fallback;
+  return value === true || value === 'true';
+};
+
+const asInt = (value, fallback) => {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
+};
 
 export const GET = withApi(async (request) => {
-  await requireAuth(request);
+  const authUser = await requireAuth(request);
 
   const query = Object.fromEntries(request.nextUrl.searchParams.entries());
   const {
     keywords = '',
     location = '',
     distance = 25,
-    permanent = true,
-    contract = true,
-    temp = true,
-    partTime = true,
-    fullTime = true,
     minimumSalary = 0,
     maximumSalary = 0,
     postedDays = 30,
-    page = 1,
-    limit = 20,
+    country = 'gb',
+    sort = 'mixed',
   } = query;
 
-  logger.info(`Job search request: ${keywords} in ${location}`);
+  const page = Math.max(asInt(query.page, 1), 1);
+  const limit = Math.min(Math.max(asInt(query.limit, 20), 1), 100);
+  const tier = authUser.subscriptionTier || 'free';
 
-  // Check if Reed API key is configured
-  if (!REED_API_KEY) {
-    logger.error('Reed API key not configured');
+  // The UI sends job types as individual booleans; the adapters take a list.
+  const jobTypes = [
+    asBool(query.permanent, true) && 'permanent',
+    asBool(query.contract, true) && 'contract',
+    asBool(query.temp, true) && 'temporary',
+    asBool(query.partTime, true) && 'part-time',
+    asBool(query.fullTime, true) && 'full-time',
+  ].filter(Boolean);
+
+  const requested = query.boards
+    ? query.boards.split(',').map((b) => b.trim()).filter(Boolean)
+    : null;
+
+  const { boards, skipped } = resolveBoards({ requested, tier });
+
+  logger.info(
+    `Job search request: "${keywords}" in "${location}" across [${boards.join(', ')}] (tier ${tier})`
+  );
+
+  if (boards.length === 0) {
+    // Three distinguishable causes, and conflating them sends the user down the
+    // wrong path: an upgrade prompt, a deliberate cost control, or a genuine
+    // deployment problem they cannot fix themselves.
+    const allAre = (reason) => skipped.length > 0 && skipped.every((s) => s.reason === reason);
+
+    const { error, code, status } = allAre('upgrade_required')
+      ? { error: skipped[0].error, code: 'UPGRADE_REQUIRED', status: 403 }
+      : allAre('paid_disabled')
+        ? {
+            error: `${skipped[0].error}. Enable it by setting ENABLE_PAID_JOB_BOARDS=true, or search a free board instead.`,
+            code: 'PAID_BOARDS_DISABLED',
+            status: 409,
+          }
+        : {
+            error: 'Job search service is not configured. Please contact support.',
+            code: 'SERVICE_UNAVAILABLE',
+            status: 503,
+          };
+
+    return NextResponse.json({ success: false, error, code, boardErrors: skipped }, { status });
+  }
+
+  const result = await searchAllBoards(
+    keywords,
+    location,
+    {
+      distance: asInt(distance, 25),
+      minimumSalary: asInt(minimumSalary, 0),
+      maximumSalary: asInt(maximumSalary, 0),
+      jobTypes,
+      page,
+      limit,
+      country,
+      remoteOnly: asBool(query.remoteOnly, false),
+      visaSponsorship: asBool(query.visaSponsorship, false),
+    },
+    boards
+  );
+
+  const boardErrors = [...skipped, ...(result.errors || [])];
+
+  // Every board erroring is an outage, not an empty result set - saying "no
+  // jobs found" there would send the user off rewriting a search that was fine.
+  if (result.jobs.length === 0 && result.boardsSearched.length === 0) {
+    // Running out of free-tier requests is not an outage and must not be
+    // reported as one: it is expected, self-healing, and the user needs the
+    // time it clears rather than "try again shortly".
+    const quotaBlocked = boardErrors.filter(
+      (e) => e.reason === 'quota_exhausted' || e.reason === 'upstream_rate_limited'
+    );
+
+    if (quotaBlocked.length && quotaBlocked.length === boardErrors.length) {
+      // Soonest board to free up - that is when a retry can actually succeed.
+      const availableAt = quotaBlocked
+        .map((e) => e.availableAt)
+        .filter(Boolean)
+        .sort()[0] || null;
+
+      const retryAfter = secondsUntil(availableAt);
+
+      logger.warn(`All boards out of request budget until ${availableAt}`);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: availableAt
+            ? `Daily search limit reached for every enabled job board. Searches resume at ${new Date(availableAt).toUTCString()}.`
+            : 'Search limit reached for every enabled job board.',
+          code: 'QUOTA_EXCEEDED',
+          availableAt,
+          retryAfterSeconds: retryAfter,
+          boardErrors,
+        },
+        {
+          status: 429,
+          // Standard header so any HTTP client (not just our UI) can back off.
+          ...(retryAfter ? { headers: { 'Retry-After': String(retryAfter) } } : {}),
+        }
+      );
+    }
+
+    logger.error(`All job boards failed: ${JSON.stringify(boardErrors)}`);
     return NextResponse.json(
       {
         success: false,
-        error: 'Job search service is not configured. Please contact support.',
+        error: 'Job search is temporarily unavailable. Please try again shortly.',
         code: 'SERVICE_UNAVAILABLE',
+        boardErrors,
       },
       { status: 503 }
     );
   }
 
-  try {
-    // Search using Reed API
-    const reedResults = await searchReedJobs({
-      keywords,
-      location,
-      distance,
-      permanent,
-      contract,
-      temp,
-      partTime,
-      fullTime,
-      minimumSalary,
-      maximumSalary,
-      page,
-      limit,
-    });
+  const ordered = sort === 'date' ? byDateDesc(result.jobs) : interleaveByBoard(result.jobs, boards);
 
-    const jobs = reedResults.jobs || [];
-    const totalResults = reedResults.totalResults || 0;
+  // Each board was asked for `limit` results, so the merged set can be several
+  // times the page size. Trim to the requested size and keep pagination honest:
+  // page N asks every board for its own page N.
+  const jobs = ordered.slice(0, limit).map((job) => ({
+    ...job,
+    id: `${job.source}_${job.externalId}`,
+  }));
 
-    logger.info(`Reed API returned ${jobs.length} jobs out of ${totalResults} total`);
+  const totalResults = result.totalResults;
 
-    // Calculate pagination
-    const totalPages = Math.ceil(totalResults / limit);
-    const hasNextPage = page < totalPages;
-    const hasPreviousPage = page > 1;
-
-    // Return successful response
-    return NextResponse.json(
-      {
-        success: true,
-        data: {
-          jobs,
-          pagination: {
-            currentPage: parseInt(page),
-            totalPages,
-            totalResults,
-            limit: parseInt(limit),
-            hasNextPage,
-            hasPreviousPage,
-          },
-          source: 'reed',
-          searchParams: {
-            keywords,
-            location,
-            distance,
-            filters: {
-              permanent,
-              contract,
-              temp,
-              partTime,
-              fullTime,
-              minimumSalary,
-              maximumSalary,
-              postedDays,
-            },
+  return NextResponse.json(
+    {
+      success: true,
+      data: {
+        jobs,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.max(Math.ceil(totalResults / limit), 1),
+          totalResults,
+          limit,
+          hasNextPage: ordered.length > limit || page * limit < totalResults,
+          hasPreviousPage: page > 1,
+        },
+        // Kept as a string for backwards compatibility with the previous
+        // `source: 'reed'` field; `boardsSearched` is the structured version.
+        source: result.boardsSearched.join(', '),
+        boardsSearched: result.boardsSearched,
+        boardErrors,
+        // Boards that sat this search out because their budget is spent, and
+        // when each returns. Present even on a successful search so the UI can
+        // warn before the user runs out entirely rather than only after.
+        quotaBlocked: boardErrors
+          .filter((e) => e.reason === 'quota_exhausted' || e.reason === 'upstream_rate_limited')
+          .map((e) => ({ board: e.board, availableAt: e.availableAt || null })),
+        searchParams: {
+          keywords,
+          location,
+          distance,
+          boards,
+          filters: {
+            jobTypes,
+            minimumSalary,
+            maximumSalary,
+            postedDays,
           },
         },
       },
-      { status: 200 }
-    );
-  } catch (error) {
-    logger.error(`Reed API search failed: ${error.message}`);
-
-    // Handle specific error types
-    if (error.response?.status === 503) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Job search service is temporarily unavailable. Please try again later.',
-          code: 'SERVICE_UNAVAILABLE',
-        },
-        { status: 503 }
-      );
-    } else if (error.response?.status === 429) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Too many search requests. Please wait a moment and try again.',
-          code: 'RATE_LIMITED',
-        },
-        { status: 429 }
-      );
-    } else if (error.response?.status === 401) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Job search service authentication failed. Please contact support.',
-          code: 'AUTH_FAILED',
-        },
-        { status: 503 }
-      );
-    } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Cannot connect to job search service. Please try again later.',
-          code: 'CONNECTION_FAILED',
-        },
-        { status: 503 }
-      );
-    }
-
-    // Generic error response
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Job search failed. Please try again.',
-        code: 'SEARCH_FAILED',
-      },
-      { status: 500 }
-    );
-  }
+    },
+    { status: 200 }
+  );
 });
 
-// Reed API integration function with CORRECT parameters
-const searchReedJobs = async (params) => {
-  const {
-    keywords,
-    location,
-    distance,
-    permanent,
-    contract,
-    temp,
-    partTime,
-    fullTime,
-    minimumSalary,
-    maximumSalary,
-    page,
-    limit,
-  } = params;
+function byDateDesc(jobs) {
+  return [...jobs].sort(
+    (a, b) => new Date(b.postedDate || 0).getTime() - new Date(a.postedDate || 0).getTime()
+  );
+}
 
-  // Build Reed API parameters with CORRECT parameter names
-  const reedParams = new URLSearchParams();
+// Round-robin across boards so page 1 is not monopolised by whichever board
+// happened to return fastest or most. Within a board, newest first.
+function interleaveByBoard(jobs, boards) {
+  const buckets = new Map(boards.map((b) => [b, []]));
 
-  // Keywords search
-  if (keywords && keywords.trim()) {
-    reedParams.append('keywords', keywords.trim());
+  for (const job of byDateDesc(jobs)) {
+    if (!buckets.has(job.source)) buckets.set(job.source, []);
+    buckets.get(job.source).push(job);
   }
 
-  // Location search - use correct parameter name
-  if (location && location.trim()) {
-    reedParams.append('locationName', location.trim());
-  }
+  const queues = [...buckets.values()].filter((q) => q.length);
+  const out = [];
 
-  // Distance from location - use correct parameter name and only if location is provided
-  if (distance && location && location.trim()) {
-    reedParams.append('distanceFromLocation', distance.toString());
-  }
-
-  // Salary filters
-  if (minimumSalary && minimumSalary > 0) {
-    reedParams.append('minimumSalary', minimumSalary.toString());
-  }
-  if (maximumSalary && maximumSalary > 0) {
-    reedParams.append('maximumSalary', maximumSalary.toString());
-  }
-
-  // Job type filters - Reed expects explicit true/false values
-  // Only send parameters that are explicitly set to true
-  if (permanent === true) {
-    reedParams.append('permanent', 'true');
-  } else if (permanent === false) {
-    reedParams.append('permanent', 'false');
-  }
-
-  if (contract === true) {
-    reedParams.append('contract', 'true');
-  } else if (contract === false) {
-    reedParams.append('contract', 'false');
-  }
-
-  if (temp === true) {
-    reedParams.append('temp', 'true');
-  } else if (temp === false) {
-    reedParams.append('temp', 'false');
-  }
-
-  if (partTime === true) {
-    reedParams.append('partTime', 'true');
-  } else if (partTime === false) {
-    reedParams.append('partTime', 'false');
-  }
-
-  if (fullTime === true) {
-    reedParams.append('fullTime', 'true');
-  } else if (fullTime === false) {
-    reedParams.append('fullTime', 'false');
-  }
-
-  // Pagination parameters
-  reedParams.append('resultsToTake', Math.min(parseInt(limit) || 20, 100).toString()); // Reed max is 100
-  reedParams.append('resultsToSkip', (((parseInt(page) || 1) - 1) * (parseInt(limit) || 20)).toString());
-
-  logger.info(`Calling Reed API with corrected params: ${reedParams.toString()}`);
-
-  try {
-    const response = await axios.get(`${REED_API_BASE}/search`, {
-      params: reedParams,
-      auth: {
-        username: REED_API_KEY,
-        password: '',
-      },
-      headers: {
-        'User-Agent': 'JobTracker/1.0',
-        Accept: 'application/json',
-      },
-      timeout: 15000, // 15 second timeout
-    });
-
-    // Validate response
-    if (!response.data) {
-      throw new Error('No data received from Reed API');
-    }
-
-    // Extract results
-    const results = response.data.results || [];
-    const totalResults = response.data.totalResults || 0;
-
-    logger.info(`Reed API response: ${results.length} jobs, ${totalResults} total results`);
-
-    // Log first few job locations for debugging
-    if (results.length > 0) {
-      const locations = results.slice(0, 3).map((job) => job.locationName).join(', ');
-      logger.info(`Sample job locations: ${locations}`);
-    }
-
-    // Standardize job format
-    const jobs = results.map((job) => standardizeReedJob(job));
-
-    return {
-      jobs,
-      totalResults,
-    };
-  } catch (error) {
-    logger.error(`Reed API call failed: ${error.message}`);
-
-    // Log the actual URL being called for debugging
-    const debugUrl = `${REED_API_BASE}/search?${reedParams.toString()}`;
-    logger.error(`Failed URL: ${debugUrl}`);
-
-    // Re-throw with more context
-    if (error.response) {
-      // HTTP error response
-      const status = error.response.status;
-      const statusText = error.response.statusText;
-      const responseData = error.response.data;
-
-      logger.error(`Reed API HTTP ${status}: ${statusText}`, { responseData });
-      throw new Error(`Reed API returned ${status} ${statusText}: ${responseData?.message || 'Unknown error'}`);
-    } else if (error.request) {
-      // Network error
-      logger.error('Reed API network error:', error.code);
-      throw new Error('Network error: Unable to reach Reed API');
-    } else {
-      // Other error
-      throw new Error(`Reed API error: ${error.message}`);
+  while (queues.some((q) => q.length)) {
+    for (const queue of queues) {
+      if (queue.length) out.push(queue.shift());
     }
   }
-};
 
-// Standardize Reed job format
-const standardizeReedJob = (job) => {
-  return {
-    id: `reed_${job.jobId}`,
-    externalId: job.jobId.toString(),
-    source: 'reed',
-    title: job.jobTitle || 'Untitled Position',
-    company: job.employerName || 'Unknown Company',
-    location: {
-      display: job.locationName || 'Location not specified',
-      coordinates:
-        job.latitude && job.longitude
-          ? {
-              lat: parseFloat(job.latitude),
-              lng: parseFloat(job.longitude),
-            }
-          : null,
-    },
-    salary: parseSalary(job.minimumSalary, job.maximumSalary, 'GBP', 'annual'),
-    jobType: parseJobType(job.jobType),
-    workType: 'onsite', // Reed doesn't specify, default to onsite
-    description: job.jobDescription || 'No description available',
-    applicationUrl: job.jobUrl || '',
-    companyUrl: job.employerProfileUrl || null,
-    logoUrl: job.employerLogoUrl || null,
-    postedDate: job.date ? new Date(job.date) : new Date(),
-    expirationDate: job.expirationDate ? new Date(job.expirationDate) : null,
-  };
-};
-
-// Helper function to parse salary information
-const parseSalary = (min, max, currency = 'GBP', period = 'annual') => {
-  const result = {
-    currency,
-    period,
-  };
-
-  if (min && min > 0) result.min = parseFloat(min);
-  if (max && max > 0) result.max = parseFloat(max);
-
-  // Generate display string
-  if (result.min && result.max) {
-    result.display = `£${result.min.toLocaleString()} - £${result.max.toLocaleString()} ${period}`;
-  } else if (result.min) {
-    result.display = `From £${result.min.toLocaleString()} ${period}`;
-  } else if (result.max) {
-    result.display = `Up to £${result.max.toLocaleString()} ${period}`;
-  }
-
-  return result;
-};
-
-// Helper function to parse job type
-const parseJobType = (type) => {
-  if (!type) return 'permanent';
-
-  const lowerType = type.toLowerCase();
-
-  if (lowerType.includes('contract')) return 'contract';
-  if (lowerType.includes('temp')) return 'temporary';
-  if (lowerType.includes('part')) return 'part-time';
-  if (lowerType.includes('full')) return 'full-time';
-  if (lowerType.includes('intern')) return 'internship';
-
-  return 'permanent';
-};
+  return out;
+}

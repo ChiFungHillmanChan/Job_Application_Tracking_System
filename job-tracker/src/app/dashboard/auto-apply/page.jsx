@@ -4,6 +4,21 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import withAuth from '@/lib/withAuth';
 import autoApplyService from '@/lib/services/autoApplyService';
+import jobFinderService from '@/lib/jobFinderService';
+
+// Quota resets are UTC instants; render them in the viewer's own timezone so
+// "back at 01:00" means something locally.
+function fmtTime(iso) {
+  if (!iso) return 'later';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'later';
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return d.toLocaleString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(sameDay ? {} : { month: 'short', day: 'numeric' }),
+  });
+}
 
 function AutoApplyDashboard() {
   const [stats, setStats] = useState(null);
@@ -13,6 +28,10 @@ function AutoApplyDashboard() {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [showConfigEditor, setShowConfigEditor] = useState(false);
+  // Board catalog comes from the server so this list never drifts from the
+  // adapter registry (it used to be a hardcoded ['reed', 'adzuna']).
+  const [boardCatalog, setBoardCatalog] = useState([]);
+  const [exhaustedBoards, setExhaustedBoards] = useState([]);
   const [configForm, setConfigForm] = useState({
     keywords: '',
     locationName: '',
@@ -35,11 +54,16 @@ function AutoApplyDashboard() {
   const loadDashboard = async () => {
     setLoading(true);
     try {
-      const [statsRes, configRes] = await Promise.all([
+      // A missing/failing board catalog must not blank the whole dashboard, so
+      // it is fetched tolerantly alongside the two required calls.
+      const [statsRes, configRes, boardsRes] = await Promise.all([
         autoApplyService.getStats(),
-        autoApplyService.getSearchConfig()
+        autoApplyService.getSearchConfig(),
+        jobFinderService.getBoards().catch(() => null)
       ]);
       setStats(statsRes.data);
+      setBoardCatalog(boardsRes?.data?.boards || []);
+      setExhaustedBoards(boardsRes?.data?.exhausted || []);
 
       const cfg = configRes.data;
       setConfig(cfg);
@@ -386,20 +410,77 @@ function AutoApplyDashboard() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Job Boards</label>
                 <div className="flex flex-wrap gap-2">
-                  {['reed', 'adzuna'].map(board => (
-                    <button
-                      key={board}
-                      onClick={() => toggleBoard(board)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors capitalize ${
-                        configForm.boards.includes(board)
-                          ? 'bg-primary-100 text-primary-700 border-primary-300 dark:bg-primary-900 dark:text-primary-300 dark:border-primary-700'
-                          : 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600'
-                      }`}
-                    >
-                      {board}
-                    </button>
-                  ))}
+                  {boardCatalog.map(board => {
+                    const selected = configForm.boards.includes(board.name);
+                    // Two distinct reasons a board can be off-limits, and the
+                    // user can act on only one of them.
+                    // Tightest remaining window drives the badge: a board with
+                    // 900 left this month but 0 left today is out of requests.
+                    const tightest = (board.quota?.windows || [])
+                      .slice()
+                      .sort((a, b) => a.remaining - b.remaining)[0];
+
+                    const reason = board.paidDisabled
+                      ? `${board.label} bills per request — disabled (set ENABLE_PAID_JOB_BOARDS=true to allow)`
+                      : !board.configured
+                        ? 'Not configured on this deployment'
+                        : board.quota?.exhausted
+                          ? `Out of requests until ${fmtTime(board.quota.availableAt)}`
+                          : !board.available
+                            ? `Requires the ${board.tier} plan`
+                            : [
+                                board.coverage,
+                                ...(board.quota?.windows || []).map(
+                                  (w) => `${w.remaining}/${w.limit} requests left this ${w.window}`
+                                ),
+                              ]
+                                .filter(Boolean)
+                                .join(' — ');
+
+                    return (
+                      <button
+                        key={board.name}
+                        onClick={() => board.available && toggleBoard(board.name)}
+                        disabled={!board.available}
+                        title={reason}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                          !board.available
+                            ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600 dark:border-gray-700'
+                            : selected
+                              ? 'bg-primary-100 text-primary-700 border-primary-300 dark:bg-primary-900 dark:text-primary-300 dark:border-primary-700'
+                              : 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600'
+                        }`}
+                      >
+                        {board.label}
+                        {board.paid ? (
+                          <span className="ml-1.5 text-xs uppercase opacity-70">paid</span>
+                        ) : board.tier !== 'free' && (
+                          <span className="ml-1.5 text-xs uppercase opacity-70">{board.tier}</span>
+                        )}
+                        {tightest && !board.quota?.exhausted && (
+                          <span className="ml-1.5 text-xs tabular-nums opacity-60">
+                            {tightest.remaining}/{tightest.limit}
+                          </span>
+                        )}
+                        {board.quota?.exhausted && (
+                          <span className="ml-1.5 text-xs opacity-70">0 left</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {boardCatalog.every(b => !b.paid || b.paidDisabled)
+                    ? 'Every enabled board is free — nothing here bills per search.'
+                    : 'Boards marked “paid” bill per search against your API quota.'}
+                  {' '}Counts show requests left in the tightest window; searches stop
+                  automatically before a board’s free tier runs out.
+                </p>
+                {exhaustedBoards.length > 0 && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    Out of requests: {exhaustedBoards.map(b => `${b.label} (back ${fmtTime(b.availableAt)})`).join(', ')}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
