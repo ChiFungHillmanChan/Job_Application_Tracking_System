@@ -9,8 +9,9 @@
 import { NextResponse } from 'next/server';
 import { withApi } from '@/server/http';
 import { requireAuth } from '@/server/auth';
-import Job from '@/server/models/Job';
+import Job, { JOB_UPDATABLE_FIELDS } from '@/server/models/Job';
 import '@/server/models/Resume';
+import { pickAllowed, readJsonBody } from '@/server/requestUtils';
 import logger from '@/server/logger';
 
 export const GET = withApi(async (request, context) => {
@@ -78,7 +79,7 @@ export const PUT = withApi(async (request, context) => {
   const { id } = await context.params;
 
   try {
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     let job = await Job.findById(id);
 
@@ -103,10 +104,19 @@ export const PUT = withApi(async (request, context) => {
       );
     }
 
-    // Update job
+    // Update job.
+    //
+    // Only JOB_UPDATABLE_FIELDS are copied across. Spreading the raw body here
+    // was a mass-assignment hole: `user` is a schema path, so
+    // `PUT /api/jobs/:id {"user":"<someone else's id>"}` moved the caller's job
+    // into another account (verified: it vanished from the owner's list and
+    // appeared in the target's). It also let a client rewrite `source`,
+    // `externalId`, `activities` and `analytics`, and because
+    // findByIdAndUpdate skips `pre('save')`, the model's
+    // "External jobs must have an external ID" guard was bypassed entirely.
     job = await Job.findByIdAndUpdate(
       id,
-      { ...body, updatedAt: Date.now() },
+      { ...pickAllowed(body, JOB_UPDATABLE_FIELDS), updatedAt: Date.now() },
       { new: true, runValidators: true }
     ).populate('resumeUsed', 'name version');
 
