@@ -10,11 +10,12 @@ import { withApi } from '@/server/http';
 import { requireAuth } from '@/server/auth';
 import SavedJob from '@/server/models/SavedJob';
 import User from '@/server/models/User';
+import { escapeRegex, parsePagination, readJsonBody } from '@/server/requestUtils';
 import logger from '@/server/logger';
 
 export const POST = withApi(async (request) => {
   const authUser = await requireAuth(request);
-  const body = await request.json();
+  const body = await readJsonBody(request);
 
   const {
     externalId,
@@ -147,8 +148,6 @@ export const GET = withApi(async (request) => {
 
   const query = Object.fromEntries(searchParams.entries());
   const {
-    page = 1,
-    limit = 20,
     sortBy = 'savedAt',
     sortOrder = 'desc',
     source,
@@ -157,6 +156,7 @@ export const GET = withApi(async (request) => {
   } = query;
   const tagsList = searchParams.getAll('tags');
   const tags = tagsList.length > 1 ? tagsList : tagsList[0];
+  const { page, limit, skip } = parsePagination(searchParams, { defaultLimit: 20 });
 
   // Build filter query
   const filter = { user: authUser._id };
@@ -164,7 +164,9 @@ export const GET = withApi(async (request) => {
   if (source) filter.source = source;
   if (jobType) filter.jobType = jobType;
   if (location) {
-    filter['location.display'] = new RegExp(location, 'i');
+    // Escaped: this is a literal location substring, and an unbalanced
+    // metacharacter would otherwise throw SyntaxError and 500 the request.
+    filter['location.display'] = new RegExp(escapeRegex(location), 'i');
   }
   if (tags) {
     const tagArray = Array.isArray(tags) ? tags : [tags];
@@ -178,8 +180,8 @@ export const GET = withApi(async (request) => {
   try {
     const savedJobs = await SavedJob.find(filter)
       .sort(sort)
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
+      .limit(limit)
+      .skip(skip)
       .exec();
 
     const totalCount = await SavedJob.countDocuments(filter);
@@ -199,10 +201,10 @@ export const GET = withApi(async (request) => {
         data: {
           jobs: savedJobs,
           pagination: {
-            currentPage: parseInt(page),
+            currentPage: page,
             totalPages,
             totalCount,
-            limit: parseInt(limit),
+            limit,
             hasNextPage: page < totalPages,
             hasPreviousPage: page > 1,
           },

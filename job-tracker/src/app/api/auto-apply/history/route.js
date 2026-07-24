@@ -5,18 +5,20 @@ import { NextResponse } from 'next/server';
 import { withApi } from '@/server/http';
 import { requireAuth } from '@/server/auth';
 import AutomationRun from '@/server/models/AutomationRun';
+import { parsePagination } from '@/server/requestUtils';
 
 export const GET = withApi(async (request) => {
   const authUser = await requireAuth(request);
   const searchParams = request.nextUrl.searchParams;
 
-  const page = searchParams.get('page') || 1;
-  const limit = searchParams.get('limit') || 20;
+  // Clamped to positive integers; `?page=0` / `?limit=abc` previously produced
+  // a negative or NaN skip.
+  const { page, limit, skip } = parsePagination(searchParams, { defaultLimit: 20 });
 
   const runs = await AutomationRun.find({ user: authUser._id })
     .sort({ runDate: -1 })
-    .limit(parseInt(limit))
-    .skip((parseInt(page) - 1) * parseInt(limit));
+    .limit(limit)
+    .skip(skip);
 
   const totalCount = await AutomationRun.countDocuments({ user: authUser._id });
 
@@ -26,8 +28,8 @@ export const GET = withApi(async (request) => {
       data: {
         runs,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          currentPage: page,
+          totalPages: Math.ceil(totalCount / limit),
           totalCount,
         },
       },
