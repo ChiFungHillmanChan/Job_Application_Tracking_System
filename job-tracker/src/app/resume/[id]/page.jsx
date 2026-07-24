@@ -60,22 +60,21 @@ export default function ResumeViewer() {
         if (response && response.success) {
           setResume(response.data);
           
-          // Try to create preview URL for real backend
+          // Try to create preview URL via same-origin API route
           try {
-            const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
             const token = localStorage.getItem('token');
-            
+
             if (token && !token.startsWith('mock-token-')) {
-              // For real backend, try to check if file is accessible
-              const testResponse = await fetch(`${backendUrl}/resumes/${id}/preview?token=${encodeURIComponent(token)}`, {
+              // Check if file is accessible
+              const testResponse = await fetch(`/api/resumes/${id}/preview?token=${encodeURIComponent(token)}`, {
                 method: 'HEAD',
                 headers: {
                   'Authorization': `Bearer ${token}`,
                 },
               });
-              
+
               if (testResponse.ok) {
-                setPreviewUrl(`${backendUrl}/resumes/${id}/preview?token=${encodeURIComponent(token)}`);
+                setPreviewUrl(`/api/resumes/${id}/preview?token=${encodeURIComponent(token)}`);
               } else {
                 console.warn('Preview test failed:', testResponse.status, testResponse.statusText);
                 setPreviewError(true);
@@ -124,11 +123,10 @@ export default function ResumeViewer() {
         document.body.removeChild(link);
         URL.revokeObjectURL(downloadUrl);
       } else {
-        // For real backend, make authenticated request
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+        // Same-origin API route
         const token = localStorage.getItem('token');
-        
-        const response = await fetch(`${backendUrl}/resumes/${id}/download?token=${encodeURIComponent(token)}`, {
+
+        const response = await fetch(`/api/resumes/${id}/download?token=${encodeURIComponent(token)}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },

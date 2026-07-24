@@ -47,3 +47,5 @@ logs
 
 # uploads
 uploads
+.env*
+/.swc

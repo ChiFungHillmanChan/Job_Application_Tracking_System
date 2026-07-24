@@ -204,11 +204,10 @@ function ResumesSettings() {
         document.body.removeChild(link);
         URL.revokeObjectURL(downloadUrl);
       } else {
-        // For real backend, make authenticated request
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+        // Same-origin API route
         const token = localStorage.getItem('token');
-        
-        const response = await fetch(`${backendUrl}/resumes/${resumeId}/download?token=${encodeURIComponent(token)}`, {
+
+        const response = await fetch(`/api/resumes/${resumeId}/download?token=${encodeURIComponent(token)}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
