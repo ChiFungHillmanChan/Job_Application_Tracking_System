@@ -15,6 +15,11 @@ export const FEATURE_TIERS = {
   'basic_colors': 'free',
   'basic_fonts': 'free',
   'basic_density': 'free',
+  // task-9: 'job_import' was missing from FEATURE_TIERS entirely, so
+  // requireFeature threw ApiError(400, 'Unknown feature') for every caller,
+  // making POST /api/job-finder/import/:savedJobId a hard 400 for all tiers.
+  // Registered at 'free' as the working default until pricing decides its tier.
+  'job_import': 'free',
 
   'custom_colors': 'plus',
   'advanced_typography': 'plus',
