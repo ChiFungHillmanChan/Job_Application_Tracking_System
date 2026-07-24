@@ -1,6 +1,6 @@
 import './globals.css';
 import Header from '@/components/layout/Header';
-import AuthWrapper from '@/components/AuthWrapper';
+import AuthWrapper from '@/components/authWrapper';
 
 export const metadata = {
   title: 'Job Application Tracker',
