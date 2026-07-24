@@ -1,20 +1,12 @@
-// Port of backend/controllers/resumeController.js previewResume
-// @route   GET /api/resumes/:id/preview
+// Port of backend/controllers/resumeController.js downloadResume
+// @route   GET /api/resumes/:id/download
 // @access  Private
-//
-// Replaces the previous thin proxy (fetch to `${API_URL}/resumes/:id/preview`
-// with a `token` cookie) with a real handler that fetches the file straight
-// from Vercel Blob. requireAuth honors `?token=` query-param auth (see
-// src/server/auth.js), so `<iframe src=".../preview?token=...">` still works.
 //
 // Deviation: fs.createReadStream(...).pipe(res) is replaced with fetching
 // the file from Vercel Blob and streaming that response body straight
-// through. Content-Type/Content-Disposition/Cache-Control/nosniff/
-// Accept-Ranges are ported verbatim; Content-Length is forwarded from the
-// blob response when present (the source computed it from fs.statSync). The
-// source's `res.removeHeader('X-Frame-Options')` has no equivalent needed
-// here - nothing in this app sets that header on API routes (checked
-// next.config.js), so it is simply never set.
+// through. Content-Type/Content-Disposition/Cache-Control are ported
+// verbatim; Content-Length is forwarded from the blob response when present
+// (the source computed it from fs.statSync).
 import { NextResponse } from 'next/server';
 import path from 'path';
 import { withApi } from '@/server/http';
@@ -80,14 +72,9 @@ export const GET = withApi(async (request, context) => {
     if (contentLength) headers.set('Content-Length', contentLength);
     headers.set(
       'Content-Disposition',
-      `inline; filename="${resume.originalFilename || resume.name + ext}"`
+      `attachment; filename="${resume.originalFilename || resume.name + ext}"`
     );
-    headers.set('Cache-Control', 'public, max-age=3600');
-
-    if (ext === '.pdf') {
-      headers.set('X-Content-Type-Options', 'nosniff');
-      headers.set('Accept-Ranges', 'bytes');
-    }
+    headers.set('Cache-Control', 'no-cache');
 
     return new Response(blobRes.body, { status: 200, headers });
   } catch (error) {
