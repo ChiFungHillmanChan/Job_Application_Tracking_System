@@ -15,7 +15,12 @@ function parseReedDate(value) {
 
 class ReedAdapter extends BaseJobBoardAdapter {
   constructor() {
-    super('reed');
+    super('reed', {
+      label: 'Reed',
+      tier: 'free',
+      coverage: 'UK only',
+      requiresKey: true
+    });
     this.apiBase = 'https://www.reed.co.uk/api/1.0';
   }
 

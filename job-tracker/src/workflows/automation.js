@@ -20,7 +20,8 @@ import SavedJob from '@/server/models/SavedJob';
 import PreparedApplication from '@/server/models/PreparedApplication';
 import AutomationRun from '@/server/models/AutomationRun';
 import Resume from '@/server/models/Resume';
-import { searchAllBoards } from '@/server/services/jobBoards';
+import User from '@/server/models/User';
+import { searchAllBoards, resolveBoards } from '@/server/services/jobBoards';
 import { scoreJobMatch } from '@/server/services/aiJobMatcher';
 import { generateCoverLetter } from '@/server/services/aiCoverLetterWriter';
 import logger from '@/server/logger';
@@ -105,8 +106,14 @@ async function loadRunContext(configId, runId) {
     .select('_id')
     .lean();
 
+  // Paid boards (JSearch) are billed per request, so the run has to know which
+  // plan is footing the bill. Missing user -> treat as free rather than failing
+  // the run; the worst case is a slightly narrower search.
+  const owner = await User.findById(config.user).select('subscriptionTier').lean();
+
   return {
     userId,
+    tier: owner?.subscriptionTier || 'free',
     configId: String(config._id),
     runId: String(runId),
     startedAt: Date.now(),
@@ -167,6 +174,18 @@ async function searchBoardsStep(ctx) {
   const errors = [];
   const collected = [];
 
+  // Drop boards that are unconfigured, unknown (legacy configs still hold
+  // 'linkedin'/'totaljobs' from the old enum), or above this user's plan. The
+  // reasons are recorded as run errors so the user can see why a board they
+  // selected contributed nothing.
+  const { boards, skipped } = resolveBoards({ requested: ctx.boards, tier: ctx.tier });
+  errors.push(...skipped.map(({ board, error }) => ({ board, error })));
+
+  if (!boards.length) {
+    logger.warn(`Automation run for user ${ctx.userId}: no searchable boards`);
+    return { jobs: [], jobsFound: 0, boardsSearched: [], errors };
+  }
+
   for (const query of queries) {
     const result = await searchAllBoards(
       query.keywords,
@@ -178,7 +197,7 @@ async function searchBoardsStep(ctx) {
         limit: ctx.maxResultsPerRun,
         distance: query.radius,
       },
-      ctx.boards
+      boards
     );
 
     jobsFound += result.jobs.length;
@@ -211,18 +230,30 @@ async function searchBoardsStep(ctx) {
     collected.push(...filtered);
   }
 
-  // Dedupe across queries by externalId (searchAllBoards only dedupes within a
-  // single call), then drop anything the user has already saved.
-  const uniqueByExternalId = Array.from(
-    new Map(collected.map((j) => [j.externalId, j])).values()
+  // Dedupe across queries (searchAllBoards only dedupes within a single call),
+  // then drop anything the user has already saved.
+  //
+  // The key is source+externalId, not externalId alone: board IDs are small
+  // integers on Reed and Jooble alike, so keying on the bare ID silently
+  // discarded unrelated jobs that happened to share a numeric ID - and matched
+  // the wrong SavedJob rows when filtering out already-saved postings. This is
+  // also the pair SavedJob's unique index is built on.
+  const unique = Array.from(
+    new Map(collected.map((j) => [`${j.source}:${j.externalId}`, j])).values()
   );
 
-  const existingExternalIds = await SavedJob.find({
-    user: ctx.userId,
-    externalId: { $in: uniqueByExternalId.map((j) => j.externalId) },
-  }).distinct('externalId');
+  // Mongo rejects an empty $or, and there is nothing to look up anyway.
+  const existing = unique.length
+    ? await SavedJob.find({
+        user: ctx.userId,
+        $or: unique.map((j) => ({ source: j.source, externalId: j.externalId })),
+      })
+        .select('source externalId')
+        .lean()
+    : [];
 
-  const jobs = uniqueByExternalId.filter((j) => !existingExternalIds.includes(j.externalId));
+  const seen = new Set(existing.map((s) => `${s.source}:${s.externalId}`));
+  const jobs = unique.filter((j) => !seen.has(`${j.source}:${j.externalId}`));
 
   return { jobs, jobsFound, boardsSearched, errors };
 }

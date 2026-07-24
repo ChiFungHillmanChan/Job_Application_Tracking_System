@@ -1,0 +1,9 @@
+# Transient Claude Code worktrees. These are full checkouts of this repo
+# (each with its own .env files) and must never be committed.
+.claude/worktrees/
+
+# Local environment files, belt-and-braces at the repo root as well as in
+# job-tracker/ — a stray .env outside job-tracker/ would otherwise be tracked.
+.env
+.env.*
+!.env.example

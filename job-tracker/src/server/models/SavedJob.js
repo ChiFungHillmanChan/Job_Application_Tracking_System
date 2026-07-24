@@ -13,10 +13,13 @@ const SavedJobSchema = new mongoose.Schema({
     required: [true, 'External job ID is required'],
     index: true
   },
+  // Must list every adapter registered in src/server/services/jobBoards/index.js
+  // - a board missing here fails validation on save, which surfaces to the user
+  // as a Save button that silently does nothing.
   source: {
     type: String,
     required: [true, 'Job source is required'],
-    enum: ['reed', 'adzuna', 'indeed', 'other'],
+    enum: ['reed', 'adzuna', 'jooble', 'arbeitnow', 'remotive', 'jsearch', 'indeed', 'other'],
     default: 'reed'
   },
   title: {
@@ -67,14 +70,24 @@ const SavedJobSchema = new mongoose.Schema({
       type: Number,
       min: [0, 'Maximum salary cannot be negative']
     },
+    // Widened for the non-UK boards (Adzuna's ~20 countries, Jooble's ~70,
+    // JSearch's worldwide Google for Jobs feed). Kept in sync with
+    // SUPPORTED_CURRENCIES in src/server/services/jobBoards/normalize.js;
+    // anything outside this list is left unset by the adapters and preserved in
+    // `display` rather than mislabelled as GBP.
     currency: {
       type: String,
       default: 'GBP',
-      enum: ['GBP', 'USD', 'EUR']
+      enum: [
+        'GBP', 'USD', 'EUR', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'DKK',
+        'PLN', 'INR', 'SGD', 'HKD', 'JPY', 'NZD', 'ZAR', 'AED', 'BRL', 'MXN'
+      ]
     },
+    // 'weekly' added for JSearch, which reports a WEEK salary period that had
+    // no representation here and would have been rejected.
     period: {
       type: String,
-      enum: ['annual', 'monthly', 'daily', 'hourly'],
+      enum: ['annual', 'monthly', 'weekly', 'daily', 'hourly'],
       default: 'annual'
     },
     display: String
