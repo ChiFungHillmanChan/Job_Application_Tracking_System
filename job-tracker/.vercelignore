@@ -1,0 +1,9 @@
+# Never upload local env files — Vercel project env vars are the source of truth
+.env*
+# Legacy Express backend (fully migrated into src/; contains uploaded CV PDFs)
+backend
+# Local junk
+.DS_Store
+prompts
+preference.txt
+directory_structure.txt
