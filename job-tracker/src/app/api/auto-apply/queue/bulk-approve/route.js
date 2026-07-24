@@ -14,7 +14,18 @@ export const POST = withApi(async (request) => {
   const filter = { user: authUser._id, status: 'pending_review' };
 
   if (applicationIds?.length) {
-    filter._id = { $in: applicationIds.map((id) => new mongoose.Types.ObjectId(id)) };
+    // A malformed id throws a BSONError from the ObjectId constructor; convert
+    // that into a 400 instead of letting it surface as a 500.
+    let objectIds;
+    try {
+      objectIds = applicationIds.map((id) => new mongoose.Types.ObjectId(id));
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'Invalid application id' },
+        { status: 400 }
+      );
+    }
+    filter._id = { $in: objectIds };
   } else if (minScore) {
     filter.matchScore = { $gte: minScore };
   }

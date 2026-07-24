@@ -14,6 +14,12 @@ import logger from '@/server/logger';
 export const maxDuration = 60;
 
 export async function GET(request) {
+  // Without a configured secret there is nothing to authenticate against - a
+  // request sending `Bearer undefined` must never be treated as authorized.
+  if (!process.env.CRON_SECRET) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
   // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`. Reject anything else.
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {

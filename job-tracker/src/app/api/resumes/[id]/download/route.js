@@ -74,7 +74,9 @@ export const GET = withApi(async (request, context) => {
       'Content-Disposition',
       `attachment; filename="${resume.originalFilename || resume.name + ext}"`
     );
-    headers.set('Cache-Control', 'no-cache');
+    // private, no-store: the file is served over a ?token= auth path, so it must
+    // never be cached by shared/CDN caches where the URL (token) could leak.
+    headers.set('Cache-Control', 'private, no-store');
 
     return new Response(blobRes.body, { status: 200, headers });
   } catch (error) {

@@ -47,9 +47,19 @@ export const POST = withApi(async (request) => {
   const answers = await generateApplicationAnswers(profile, jobData, questions);
 
   if (applicationId) {
-    await PreparedApplication.findByIdAndUpdate(applicationId, {
-      applicationAnswers: answers,
-    });
+    // Scope the write to the authed user so one user cannot overwrite another
+    // user's application answers (IDOR).
+    const updated = await PreparedApplication.findOneAndUpdate(
+      { _id: applicationId, user: authUser._id },
+      { applicationAnswers: answers }
+    );
+
+    if (!updated) {
+      return NextResponse.json(
+        { success: false, error: 'Application not found' },
+        { status: 404 }
+      );
+    }
   }
 
   return NextResponse.json({ success: true, data: answers }, { status: 200 });

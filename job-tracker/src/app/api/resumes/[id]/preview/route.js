@@ -82,7 +82,9 @@ export const GET = withApi(async (request, context) => {
       'Content-Disposition',
       `inline; filename="${resume.originalFilename || resume.name + ext}"`
     );
-    headers.set('Cache-Control', 'public, max-age=3600');
+    // private, no-store: the file is served over a ?token= auth path, so it must
+    // never be cached by shared/CDN caches where the URL (token) could leak.
+    headers.set('Cache-Control', 'private, no-store');
 
     if (ext === '.pdf') {
       headers.set('X-Content-Type-Options', 'nosniff');

@@ -36,130 +36,148 @@ export async function POST(request) {
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
-  // Connect before any user lookups/updates in the handlers below.
-  await connectDB();
+  // Handlers now let their errors propagate (a failed DB write must NOT be
+  // acknowledged with a 200, or Stripe stops retrying and a paid upgrade is
+  // lost). Wrap the whole dispatch so any handler failure returns 500 and
+  // Stripe redelivers the event. Signature failure above still returns 400.
+  try {
+    // Connect before any user lookups/updates in the handlers below.
+    await connectDB();
 
-  // Handle the event
-  switch (event.type) {
-    case 'checkout.session.completed': {
-      const session = event.data.object;
-      await handleSuccessfulPayment(session);
-      break;
+    // Handle the event
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        await handleSuccessfulPayment(session);
+        break;
+      }
+
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object;
+        await handleSubscriptionUpdate(subscription);
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const deletedSubscription = event.data.object;
+        await handleSubscriptionCancellation(deletedSubscription);
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const failedInvoice = event.data.object;
+        await handlePaymentFailure(failedInvoice);
+        break;
+      }
+
+      default:
+        logger.info(`Unhandled event type: ${event.type}`);
     }
-
-    case 'customer.subscription.updated': {
-      const subscription = event.data.object;
-      await handleSubscriptionUpdate(subscription);
-      break;
-    }
-
-    case 'customer.subscription.deleted': {
-      const deletedSubscription = event.data.object;
-      await handleSubscriptionCancellation(deletedSubscription);
-      break;
-    }
-
-    case 'invoice.payment_failed': {
-      const failedInvoice = event.data.object;
-      await handlePaymentFailure(failedInvoice);
-      break;
-    }
-
-    default:
-      logger.info(`Unhandled event type: ${event.type}`);
+  } catch (err) {
+    logger.error(
+      `Webhook handler failed for ${event.type}: ${err.message}`
+    );
+    return NextResponse.json(
+      { received: false, error: 'Webhook handler failed' },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ received: true });
 }
 
-// Helper function to handle successful payment
-async function handleSuccessfulPayment(session) {
-  try {
-    const userId = session.metadata.userId;
-    const planId = session.metadata.planId;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      logger.error(`User not found for successful payment: ${userId}`);
-      return;
-    }
-
-    // Direct tier mapping - keep planId as-is (free/plus/pro)
-    user.subscriptionTier = planId;
-    user.subscriptionStatus = 'active';
-    user.stripeSubscriptionId = session.subscription;
-
-    await user.save();
-
-    logger.info(
-      `Successfully updated user ${userId} to ${user.subscriptionTier} after payment`
-    );
-  } catch (error) {
-    logger.error(`Error handling successful payment: ${error.message}`);
+// Maps a Stripe subscription status to the User model's subscriptionStatus enum
+// ['active','inactive','cancelled','past_due']. Anything unrecognized is treated
+// as inactive so an unexpected Stripe status can never fail the enum validator.
+function mapStripeStatus(stripeStatus) {
+  switch (stripeStatus) {
+    case 'active':
+    case 'trialing':
+      return 'active';
+    case 'past_due':
+      return 'past_due';
+    case 'canceled':
+      return 'cancelled';
+    default:
+      return 'inactive';
   }
+}
+
+// Helper function to handle successful payment.
+// Errors are NOT caught here - they propagate to POST so a failed DB write
+// returns 500 and Stripe retries. Only a genuinely missing user (retrying
+// will not conjure it) is logged and acknowledged.
+async function handleSuccessfulPayment(session) {
+  const userId = session.metadata.userId;
+  const planId = session.metadata.planId;
+
+  const user = await User.findById(userId);
+  if (!user) {
+    logger.error(`User not found for successful payment: ${userId}`);
+    return;
+  }
+
+  // Direct tier mapping - keep planId as-is (free/plus/pro)
+  user.subscriptionTier = planId;
+  user.subscriptionStatus = 'active';
+  user.stripeSubscriptionId = session.subscription;
+
+  await user.save();
+
+  logger.info(
+    `Successfully updated user ${userId} to ${user.subscriptionTier} after payment`
+  );
 }
 
 // Helper function to handle subscription updates
 async function handleSubscriptionUpdate(subscription) {
-  try {
-    const user = await User.findOne({ stripeSubscriptionId: subscription.id });
-    if (!user) {
-      logger.error(`User not found for subscription update: ${subscription.id}`);
-      return;
-    }
-
-    user.subscriptionStatus = subscription.status;
-    await user.save();
-
-    logger.info(
-      `Updated subscription status for user ${user._id} to ${subscription.status}`
-    );
-  } catch (error) {
-    logger.error(`Error handling subscription update: ${error.message}`);
+  const user = await User.findOne({ stripeSubscriptionId: subscription.id });
+  if (!user) {
+    logger.error(`User not found for subscription update: ${subscription.id}`);
+    return;
   }
+
+  user.subscriptionStatus = mapStripeStatus(subscription.status);
+  await user.save();
+
+  logger.info(
+    `Updated subscription status for user ${user._id} to ${user.subscriptionStatus}`
+  );
 }
 
 // Helper function to handle subscription cancellation
 async function handleSubscriptionCancellation(subscription) {
-  try {
-    const user = await User.findOne({ stripeSubscriptionId: subscription.id });
-    if (!user) {
-      logger.error(
-        `User not found for subscription cancellation: ${subscription.id}`
-      );
-      return;
-    }
-
-    user.subscriptionTier = 'free';
-    user.subscriptionStatus = 'cancelled';
-    user.stripeSubscriptionId = null;
-
-    await user.save();
-
-    logger.info(
-      `Cancelled subscription for user ${user._id}, downgraded to free tier`
+  const user = await User.findOne({ stripeSubscriptionId: subscription.id });
+  if (!user) {
+    logger.error(
+      `User not found for subscription cancellation: ${subscription.id}`
     );
-  } catch (error) {
-    logger.error(`Error handling subscription cancellation: ${error.message}`);
+    return;
   }
+
+  user.subscriptionTier = 'free';
+  user.subscriptionStatus = 'cancelled';
+  user.stripeSubscriptionId = null;
+
+  await user.save();
+
+  logger.info(
+    `Cancelled subscription for user ${user._id}, downgraded to free tier`
+  );
 }
 
 // Helper function to handle payment failures
 async function handlePaymentFailure(invoice) {
-  try {
-    const user = await User.findOne({ stripeCustomerId: invoice.customer });
-    if (!user) {
-      logger.error(`User not found for payment failure: ${invoice.customer}`);
-      return;
-    }
-
-    // Could send notification email or update user status
-    logger.warn(`Payment failed for user ${user._id}, invoice ${invoice.id}`);
-
-    // Optionally update subscription status
-    user.subscriptionStatus = 'past_due';
-    await user.save();
-  } catch (error) {
-    logger.error(`Error handling payment failure: ${error.message}`);
+  const user = await User.findOne({ stripeCustomerId: invoice.customer });
+  if (!user) {
+    logger.error(`User not found for payment failure: ${invoice.customer}`);
+    return;
   }
+
+  // Could send notification email or update user status
+  logger.warn(`Payment failed for user ${user._id}, invoice ${invoice.id}`);
+
+  // Optionally update subscription status
+  user.subscriptionStatus = 'past_due';
+  await user.save();
 }

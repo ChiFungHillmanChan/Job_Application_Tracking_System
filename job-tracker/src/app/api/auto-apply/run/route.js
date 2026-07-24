@@ -53,7 +53,17 @@ export const POST = withApi(async (request) => {
     status: 'running',
   });
 
-  await start(userAutomationWorkflow, [String(config._id), String(automationRun._id)]);
+  // If handoff fails after the run doc exists, mark it failed so it does not
+  // hang in 'running' forever (parity with the cron route).
+  try {
+    await start(userAutomationWorkflow, [String(config._id), String(automationRun._id)]);
+  } catch (error) {
+    await AutomationRun.findByIdAndUpdate(automationRun._id, {
+      status: 'failed',
+      runErrors: [{ board: 'scheduler', error: error.message }],
+    });
+    throw error;
+  }
 
   return NextResponse.json(
     {
