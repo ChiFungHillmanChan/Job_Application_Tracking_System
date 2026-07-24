@@ -18,6 +18,14 @@ const nextConfig = {
   // `ERR_INVALID_ARG_TYPE`. Keeping it external forces Node's native require,
   // where the filename resolves correctly.
   serverExternalPackages: ['pdf-parse', 'pdfjs-dist', 'xdg-app-paths', '@napi-rs/canvas'],
+  // pdfjs-dist loads @napi-rs/canvas (DOMMatrix polyfill) via a dynamic
+  // require the file tracer can't see, so force-include it (and its
+  // platform-specific binding packages) into every function bundle that
+  // can reach cvParser.
+  outputFileTracingIncludes: {
+    '/api/**': ['./node_modules/@napi-rs/**'],
+    '/.well-known/workflow/**': ['./node_modules/@napi-rs/**'],
+  },
 };
 
 // withWorkflow enables the "use workflow" / "use step" directives (WDK compiler).
