@@ -23,8 +23,8 @@ const nextConfig = {
   // platform-specific binding packages) into every function bundle that
   // can reach cvParser.
   outputFileTracingIncludes: {
-    '/api/**': ['./node_modules/@napi-rs/**'],
-    '/.well-known/workflow/**': ['./node_modules/@napi-rs/**'],
+    '/api/**': ['./node_modules/@napi-rs/**', './node_modules/pdfjs-dist/**'],
+    '/.well-known/workflow/**': ['./node_modules/@napi-rs/**', './node_modules/pdfjs-dist/**'],
   },
 };
 
